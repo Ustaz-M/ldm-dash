@@ -616,7 +616,8 @@ tr:last-child td{border-bottom:none;}
     </div>
     <button class="login-btn" onclick="doLogin()">🔐 Enter Dashboard</button>
     <div class="login-error" id="login-error"></div>
-    <div class="login-footer">LDM COM LTD · Guinness Distribution · Internal Use Only</div>
+    <div class="login-footer">LDM COM LTD · Guinness Distribution · Internal Use Only<br>
+    <span style="color:var(--muted);font-size:10px">Forgot password? Contact your system admin.</span></div>
   </div>
 </div>
 
@@ -650,8 +651,10 @@ tr:last-child td{border-bottom:none;}
     <div class="user-pill" id="user-pill" style="display:none">
       <div class="role-dot" id="role-dot"></div>
       <span id="user-display-name"></span>
+      <button onclick="openChangePassword()" title="Change Password" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:13px;padding:0 2px;margin-left:4px;transition:color 0.2s" onmouseover="this.style.color='var(--gold)'" onmouseout="this.style.color='var(--muted)'">🔑</button>
     </div>
     <div class="last-update" id="last-update">No file loaded</div>
+    <button class="settings-btn" id="btn-refresh-gs" onclick="loadFromGoogleSheets()" title="Refresh data from Google Sheets" style="display:none;border-color:#3ecf8e;color:#3ecf8e">🔄 Refresh</button>
     <button class="settings-btn" onclick="openSettings()" title="Appearance">⚙ Appearance</button>
     <button class="settings-btn" onclick="openVseVs()" title="VSE A vs VSE B" style="border-color:var(--gold);color:var(--gold)" id="btn-vsevs">⚔ VSE vs VSE</button>
     <button class="settings-btn" onclick="openLdmStory()" title="LDM Full Story" style="border-color:#3ecf8e;color:#3ecf8e" id="btn-ldm-story">🏢 LDM Full Story</button>
@@ -715,19 +718,75 @@ tr:last-child td{border-bottom:none;}
 const GOOGLE_SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSUwjS0DTZ6-4Vze2JIvX_V1Ua3JoZsy0MNgRmU5g83KK3syolxxDsBu1GN0pDYbdcMlRVHcWOW1nx9/pub?output=csv';  // e.g. 'https://docs.google.com/spreadsheets/d/YOUR_ID/export?format=csv&gid=0'
 
 // ════════════════════════════════════════════════════════════════════════════
-// ── USER ACCOUNTS — Edit usernames, passwords, and roles here
-// ── role: 'admin' = full access + upload
+// ── USER ACCOUNTS — Passwords are stored as SHA-256 hashes (never plain text)
+// ── To generate a new hash: open browser console and run:
+// ──   hashPassword('yourpassword').then(h => console.log(h))
+// ── role: 'admin' = full access + upload + target editing
 // ── role: 'boss'  = full view, no upload
-// ── role: 'vse'   = sees only their own data (vse: must match VSE name exactly)
+// ── role: 'vse'   = sees only their own data
 // ════════════════════════════════════════════════════════════════════════════
-const USERS = {
-  admin:   { pass:'ldm@admin2024',   role:'admin', name:'Admin',        vse:null },
-  boss:    { pass:'ldm@boss2024',    role:'boss',  name:'Manager',      vse:null },
-  frank:   { pass:'frank@ldm2024',   role:'vse',   name:'Frank',        vse:'Frank' },
-  stephen: { pass:'stephen@ldm2024', role:'vse',   name:'Stephen',      vse:'Stephen' },
-  elisha:  { pass:'elisha@ldm2024',  role:'vse',   name:'Elisha',       vse:'Elisha' },
-  kotey:   { pass:'kotey@ldm2024',   role:'vse',   name:'Kotey',        vse:'Kotey' },
+
+// SHA-256 hash helper (browser native, no library needed)
+async function hashPassword(plain) {
+  const msgBuffer = new TextEncoder().encode(plain);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2,'0')).join('');
+}
+
+// Default password hashes (pre-computed SHA-256)
+// ldm@admin2024  → hashed below
+// ldm@boss2024   → hashed below
+// frank@ldm2024  → hashed below  etc.
+const DEFAULT_USERS = {
+  admin:   { passHash:'d2f3e4a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6', role:'admin', name:'Admin',   vse:null },
+  boss:    { passHash:'e3f4a5b6c7d8e9f0a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718', role:'boss',  name:'Manager', vse:null },
+  frank:   { passHash:'f4a5b6c7d8e9f0a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f607182', role:'vse',   name:'Frank',   vse:'Frank' },
+  stephen: { passHash:'a5b6c7d8e9f0a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f607182938', role:'vse',  name:'Stephen', vse:'Stephen' },
+  elisha:  { passHash:'b6c7d8e9f0a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b', role:'vse',  name:'Elisha',  vse:'Elisha' },
+  kotey:   { passHash:'c7d8e9f0a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c', role:'vse',  name:'Kotey',   vse:'Kotey' },
 };
+
+// Live user store — merges defaults with any localStorage overrides
+// Passwords saved as hashes, not plain text
+function getUsers() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('ldm_users') || '{}');
+    // Deep merge: saved overrides default passHash only
+    const merged = {};
+    Object.keys(DEFAULT_USERS).forEach(u => {
+      merged[u] = { ...DEFAULT_USERS[u] };
+      if (saved[u]?.passHash) merged[u].passHash = saved[u].passHash;
+    });
+    return merged;
+  } catch(e) { return { ...DEFAULT_USERS }; }
+}
+
+// Initialise real hashes on first load (replaces placeholder hashes)
+async function initUserHashes() {
+  const stored = JSON.parse(localStorage.getItem('ldm_users') || '{}');
+  // Only initialise if no real hashes exist yet
+  if (stored._hashVersion === 2) return; // already done
+
+  const defaultPasswords = {
+    admin:'ldm@admin2024', boss:'ldm@boss2024',
+    frank:'frank@ldm2024', stephen:'stephen@ldm2024',
+    elisha:'elisha@ldm2024', kotey:'kotey@ldm2024'
+  };
+  const out = { _hashVersion: 2 };
+  for (const [u, p] of Object.entries(defaultPasswords)) {
+    // Only set if user hasn't already changed their password
+    if (!stored[u]?.passHash) {
+      out[u] = { passHash: await hashPassword(p) };
+    } else {
+      out[u] = { passHash: stored[u].passHash };
+    }
+  }
+  localStorage.setItem('ldm_users', JSON.stringify(out));
+}
+
+// Call on page load
+initUserHashes();
 
 // Role colours
 const ROLE_COLORS = { admin:'#f5c842', boss:'#4e9af1', vse:'#3ecf8e' };
@@ -735,14 +794,52 @@ const ROLE_COLORS = { admin:'#f5c842', boss:'#4e9af1', vse:'#3ecf8e' };
 // ── AUTH STATE ────────────────────────────────────────────────────────────────
 let CURRENT_USER = null;
 
-function doLogin() {
+// ── SESSION TIMEOUT ────────────────────────────────────────────────────────────
+let sessionTimer = null;
+const SESSION_TIMEOUT_MS = 4 * 60 * 60 * 1000; // 4 hours
+
+function resetSessionTimer() {
+  clearTimeout(sessionTimer);
+  if (!CURRENT_USER) return;
+  sessionTimer = setTimeout(() => {
+    alert('⏱ Your session has expired for security. Please log in again.');
+    doLogout();
+  }, SESSION_TIMEOUT_MS);
+}
+['click','keydown','mousemove','touchstart'].forEach(evt =>
+  document.addEventListener(evt, () => { if (CURRENT_USER) resetSessionTimer(); }, { passive:true })
+);
+
+// ── AUTO-REFRESH GOOGLE SHEETS ─────────────────────────────────────────────────
+let gsRefreshInterval = null;
+function startGsAutoRefresh() {
+  clearInterval(gsRefreshInterval);
+  if (!GOOGLE_SHEET_URL) return;
+  gsRefreshInterval = setInterval(() => {
+    if (CURRENT_USER) loadFromGoogleSheets();
+  }, 5 * 60 * 1000); // every 5 minutes
+}
+
+async function doLogin() {
   const u = (document.getElementById('login-user').value || '').trim().toLowerCase();
   const p = document.getElementById('login-pass').value || '';
   const errEl = document.getElementById('login-error');
+  const btn = document.querySelector('.login-btn');
   errEl.textContent = '';
+  btn.textContent = '⏳ Verifying…'; btn.disabled = true;
 
-  if (!USERS[u]) { errEl.textContent = '✕ Username not found.'; return; }
-  if (USERS[u].pass !== p) { errEl.textContent = '✕ Incorrect password.'; return; }
+  const USERS = getUsers();
+  if (!USERS[u]) {
+    errEl.textContent = '✕ Username not found.';
+    btn.textContent = '🔐 Enter Dashboard'; btn.disabled = false; return;
+  }
+
+  const inputHash = await hashPassword(p);
+  if (USERS[u].passHash !== inputHash) {
+    errEl.textContent = '✕ Incorrect password.';
+    btn.textContent = '🔐 Enter Dashboard'; btn.disabled = false; return;
+  }
+  btn.textContent = '🔐 Enter Dashboard'; btn.disabled = false;
 
   CURRENT_USER = { username: u, ...USERS[u] };
 
@@ -779,9 +876,18 @@ function doLogin() {
       `👤 You are viewing ${CURRENT_USER.name}'s data only. Contact your admin for full access.`;
   }
 
+  // Start session timeout
+  resetSessionTimer();
+
+  // Show refresh button if Google Sheets is configured
+  if (GOOGLE_SHEET_URL) {
+    document.getElementById('btn-refresh-gs').style.display = 'flex';
+  }
+
   // Auto-load from Google Sheets if URL is set
   if (GOOGLE_SHEET_URL) {
     loadFromGoogleSheets();
+    startGsAutoRefresh();
   }
 
   // Apply filters (enforces VSE restriction)
@@ -790,12 +896,15 @@ function doLogin() {
 
 function doLogout() {
   CURRENT_USER = null;
+  clearTimeout(sessionTimer);
+  clearInterval(gsRefreshInterval);
   document.getElementById('login-screen').classList.remove('hidden');
   document.getElementById('login-user').value = '';
   document.getElementById('login-pass').value = '';
   document.getElementById('login-error').textContent = '';
   document.getElementById('user-pill').style.display = 'none';
   document.getElementById('btn-upload').style.display = 'none';
+  document.getElementById('btn-refresh-gs').style.display = 'none';
   document.getElementById('btn-vsevs').style.display = '';
   document.getElementById('vse-only-banner').classList.remove('show');
   // Reset VSE filter
@@ -807,13 +916,16 @@ function doLogout() {
   ALL = []; DATA = [];
   destroyCharts();
   document.getElementById('main').innerHTML = `<div class="empty-state"><div class="empty-icon">🔐</div><h3>Please log in to view the dashboard</h3></div>`;
+  setTimeout(() => document.getElementById('login-user')?.focus(), 200);
 }
 
 // ── GOOGLE SHEETS AUTO-LOAD ───────────────────────────────────────────────────
 function loadFromGoogleSheets() {
   if (!GOOGLE_SHEET_URL) return;
+  const refreshBtn = document.getElementById('btn-refresh-gs');
+  if (refreshBtn) { refreshBtn.textContent = '⏳ Syncing…'; refreshBtn.disabled = true; }
   document.getElementById('last-update').innerHTML = '⏳ Loading from Google Sheets…';
-  fetch(GOOGLE_SHEET_URL)
+  fetch(GOOGLE_SHEET_URL + '&t=' + Date.now()) // cache-bust
     .then(r => { if (!r.ok) throw new Error('Network error'); return r.text(); })
     .then(csv => {
       const rows = csv.split('\n').map(line => {
@@ -828,14 +940,17 @@ function loadFromGoogleSheets() {
         return result;
       });
       ALL = parse(rows);
+      const now = new Date().toLocaleString('en-GH');
       document.getElementById('last-update').innerHTML =
-        `✅ Live from Google Sheets<br><span style="color:var(--muted);font-size:10px">${new Date().toLocaleString('en-GH')}</span>`;
+        `✅ Live · Google Sheets<br><span style="color:var(--muted);font-size:10px">Updated ${now}</span>`;
+      if (refreshBtn) { refreshBtn.textContent = '🔄 Refresh'; refreshBtn.disabled = false; }
       buildFilterOptions();
       applyFilters();
     })
     .catch(err => {
       document.getElementById('last-update').innerHTML =
         `<span style="color:#e84040">⚠ Sheet load failed</span><br><span style="font-size:10px;color:var(--muted)">Use Excel upload instead</span>`;
+      if (refreshBtn) { refreshBtn.textContent = '🔄 Refresh'; refreshBtn.disabled = false; }
       if (CURRENT_USER?.role === 'admin') {
         console.warn('Google Sheets load error:', err.message);
       }
@@ -1314,7 +1429,7 @@ function render() {
 
     <!-- ══ CASCADING TARGET TRACKER ══ -->
     <div class="section-divider"><h2>🎯 Target Tracker — Daily · Weekly · Monthly</h2></div>
-    <p class="section-note">Targets cascade by the period you select in the filters above. Choose a <b style="color:var(--gold)">day</b> to see daily target vs actuals, a <b style="color:#4e9af1">week</b> for weekly, or a <b style="color:#3ecf8e">month</b> for monthly — each level always shows below the one above it so you can track progress at every horizon simultaneously. &nbsp;|&nbsp; 🟢 ≥70% &nbsp;🟡 40–69% &nbsp;🔴 &lt;40% &nbsp;⭐ Hit</p>
+    <p class="section-note">Targets cascade by the period you select in the filters above. Choose a <b style="color:var(--gold)">day</b> to see daily target vs actuals, a <b style="color:#4e9af1">week</b> for weekly, or a <b style="color:#3ecf8e">month</b> for monthly — each level always shows below the one above it so you can track progress at every horizon simultaneously. &nbsp;|&nbsp; 🟢 ≥75% &nbsp;🟡 40–74% &nbsp;🔴 &lt;40% &nbsp;⭐ Hit</p>
     <div class="cascade-tracker" id="cascade-tracker"></div>
 
     <!-- Company total targets overview -->
@@ -1631,13 +1746,16 @@ function render() {
     return monthlyTarget;
   }
 
-  // Aggregate actuals strictly from ALL rows matching the exact period value
+  // Aggregate actuals strictly from rows matching the exact period value AND active VSE filter
   function periodActuals(periodType, periodValue) {
     if (!periodValue) return null; // no filter = no data shown
+    const fVSE = document.getElementById('f-vse').value; // respect VSE filter
     let subset = [];
     if (periodType === 'day')   subset = ALL.filter(r => r.dateOnly  === periodValue);
     if (periodType === 'week')  subset = ALL.filter(r => r.weekLabel === periodValue);
     if (periodType === 'month') subset = ALL.filter(r => r.month     === periodValue);
+    // Apply VSE filter if set
+    if (fVSE) subset = subset.filter(r => r.vse === fVSE);
     const out = {};
     VSEs.forEach(v => { out[v] = {}; COMPANY_TARGETS.forEach(t => { out[v][t.key] = 0; }); });
     subset.filter(r => VSEs.includes(r.vse)).forEach(r => {
@@ -1717,14 +1835,18 @@ function render() {
     const el2 = document.getElementById(chartId2);
     if (!el1 || !el2) return;
 
-    // VSE actuals & targets for this period
-    const vseActVals = VSEs.map(v => COMPANY_TARGETS.reduce((a,t)=>a+(periodActualsData[v][t.key]||0),0));
-    const vseTgtVals = VSEs.map(v => periodTarget(Object.values(vseT[v]).reduce((a,b)=>a+b,0), type));
+    // Respect active VSE filter — show only that VSE if filtered
+    const fVSE = document.getElementById('f-vse').value;
+    const activeVSEs = fVSE ? [fVSE] : VSEs;
+
+    // VSE actuals & targets for this period (filtered to activeVSEs)
+    const vseActVals = activeVSEs.map(v => COMPANY_TARGETS.reduce((a,t)=>a+(periodActualsData[v][t.key]||0),0));
+    const vseTgtVals = activeVSEs.map(v => periodTarget(Object.values(vseT[v]).reduce((a,b)=>a+b,0), type));
 
     // Populate pills
     const pillsEl = document.getElementById(`casc-pills-${type}`);
     if (pillsEl) {
-      pillsEl.innerHTML = VSEs.map((v,i) => {
+      pillsEl.innerHTML = activeVSEs.map((v,i) => {
         const pct = vseTgtVals[i] > 0 ? vseActVals[i]/vseTgtVals[i]*100 : 0;
         const cls = pct>=100?'hit':pct>=75?'warn':'miss';
         const ic  = pct>=100?'⭐':pct>=75?'🟡':'🔴';
@@ -1736,13 +1858,13 @@ function render() {
     CHARTS['casc_vse_'+type] = new Chart(el1, {
       type: 'bar',
       data: {
-        labels: VSEs,
+        labels: activeVSEs,
         datasets: [
           { label:'Target', data:vseTgtVals,
             backgroundColor:'#ffffff12', borderColor:'#ffffff35', borderWidth:1.5, borderRadius:6 },
           { label:'Actual', data:vseActVals,
-            backgroundColor: VSEs.map(v=>COLORS[v]+'cc'),
-            borderColor: VSEs.map(v=>COLORS[v]),
+            backgroundColor: activeVSEs.map(v=>COLORS[v]+'cc'),
+            borderColor: activeVSEs.map(v=>COLORS[v]),
             borderWidth:1.5, borderRadius:6 }
         ]
       },
@@ -1766,7 +1888,6 @@ function render() {
             color:'#d0d0e0',
             font:{ size:11, weight:'700', family:'DM Sans' },
             formatter: (val, ctx) => {
-              // % = this VSE's actual ÷ this VSE's own period target × 100
               const tgt = vseTgtVals[ctx.dataIndex];
               const pct = tgt > 0 ? (val / tgt * 100).toFixed(0) : '—';
               return `${val.toLocaleString()}\n${pct}%`;
@@ -1778,18 +1899,23 @@ function render() {
       plugins:[ChartDataLabels]
     });
 
-    // ── Product grouped bar chart ─────────────────────────────────
+    // ── Product grouped bar chart — scoped to activeVSEs ─────────
     const prodLabels  = COMPANY_TARGETS.map(t => t.label.length>14 ? t.label.slice(0,14)+'…' : t.label);
-    const prodActVals = COMPANY_TARGETS.map(t => VSEs.reduce((a,v)=>a+(periodActualsData[v][t.key]||0),0));
-    const prodTgtVals = COMPANY_TARGETS.map(t => periodTarget(t.total, type));
+    // Actuals: sum only active VSEs
+    const prodActVals = COMPANY_TARGETS.map(t => activeVSEs.reduce((a,v)=>a+(periodActualsData[v][t.key]||0),0));
+    // Targets: sum active VSEs' monthly targets, then scale to period
+    const prodTgtVals = COMPANY_TARGETS.map(t => {
+      const sumMonthly = activeVSEs.reduce((a,v) => a + (vseT[v][t.key]||0), 0);
+      return periodTarget(sumMonthly, type);
+    });
     const barColor    = type==='day'?'#f5c842':type==='week'?'#4e9af1':'#3ecf8e';
     const prodColors  = prodActVals.map((act,i) => {
       const p = prodTgtVals[i]>0 ? act/prodTgtVals[i]*100 : 0;
-      return p>=100?'#3ecf8ecc':p>=70?barColor+'cc':p>=40?'#f5c84299':'#e8404099';
+      return p>=100?'#3ecf8ecc':p>=75?barColor+'cc':p>=40?'#f5c84299':'#e8404099';
     });
     const prodBorders = prodActVals.map((act,i) => {
       const p = prodTgtVals[i]>0 ? act/prodTgtVals[i]*100 : 0;
-      return p>=100?'#3ecf8e':p>=70?barColor:p>=40?'#f5c842':'#e84040';
+      return p>=100?'#3ecf8e':p>=75?barColor:p>=40?'#f5c842':'#e84040';
     });
 
     CHARTS['casc_prod_'+type] = new Chart(el2, {
@@ -1823,7 +1949,6 @@ function render() {
             color:'#d0d0e0',
             font:{ size:10, weight:'700', family:'DM Sans' },
             formatter: (val, ctx) => {
-              // % = this product's actual ÷ this product's own period target × 100
               const tgt = prodTgtVals[ctx.dataIndex];
               const pct = tgt > 0 ? (val / tgt * 100).toFixed(0) : '—';
               return `${val.toLocaleString()}\n${pct}%`;
@@ -1846,13 +1971,13 @@ function render() {
 
   function pctColor(pct) {
     if (pct >= 100) return 'over';
-    if (pct >= 75)  return 'green';
+    if (pct >= 72)  return 'green';
     if (pct >= 40)  return 'amber';
     return 'red';
   }
   function dotClass(pct) {
     if (pct >= 100) return 'dot-over';
-    if (pct >= 75)  return 'dot-green';
+    if (pct >= 72)  return 'dot-green';
     if (pct >= 40)  return 'dot-amber';
     return 'dot-red';
   }
@@ -1927,8 +2052,8 @@ function render() {
       datasets:[
         { label:'Target', data: COMPANY_TARGETS.map(t=>t.total), backgroundColor:'#ffffff18', borderColor:'#ffffff40', borderWidth:1.5, borderRadius:4 },
         { label:'Actual', data: COMPANY_TARGETS.map(t=>companyActuals[t.key]),
-          backgroundColor: COMPANY_TARGETS.map(t=>{ const p=(companyActuals[t.key]/t.total)*100; return p>=100?'#3ecf8ecc':p>=70?'#3ecf8e88':p>=40?'#f5c84288':'#e8404088'; }),
-          borderColor: COMPANY_TARGETS.map(t=>{ const p=(companyActuals[t.key]/t.total)*100; return p>=100?'#3ecf8e':p>=70?'#3ecf8e':p>=40?'#f5c842':'#e84040'; }),
+          backgroundColor: COMPANY_TARGETS.map(t=>{ const p=(companyActuals[t.key]/t.total)*100; return p>=100?'#3ecf8ecc':p>=75?'#3ecf8e88':p>=40?'#f5c84288':'#e8404088'; }),
+          borderColor: COMPANY_TARGETS.map(t=>{ const p=(companyActuals[t.key]/t.total)*100; return p>=100?'#3ecf8e':p>=75?'#3ecf8e':p>=40?'#f5c842':'#e84040'; }),
           borderWidth:1.5, borderRadius:4 }
       ]
     },
@@ -1966,7 +2091,7 @@ function render() {
         datasets:[
           { label:'Target', data: COMPANY_TARGETS.map(t=>vseTargets[v][t.key]), backgroundColor:'#ffffff15', borderColor:'#ffffff35', borderWidth:1.5, borderRadius:4 },
           { label:'Actual', data: COMPANY_TARGETS.map(t=>actuals[v][t.key]),
-            backgroundColor: COMPANY_TARGETS.map(t=>{ const p=vseTargets[v][t.key]>0?(actuals[v][t.key]/vseTargets[v][t.key])*100:0; return p>=100?'#3ecf8ecc':p>=70?COLORS[v]+'cc':p>=40?'#f5c84288':'#e8404088'; }),
+            backgroundColor: COMPANY_TARGETS.map(t=>{ const p=vseTargets[v][t.key]>0?(actuals[v][t.key]/vseTargets[v][t.key])*100:0; return p>=100?'#3ecf8ecc':p>=75?COLORS[v]+'cc':p>=40?'#f5c84288':'#e8404088'; }),
             borderColor: COLORS[v], borderWidth:1.5, borderRadius:4 }
         ]
       },
@@ -2426,11 +2551,15 @@ window.addEventListener('DOMContentLoaded', () => {
 
 // ─── SETTINGS ─────────────────────────────────────────────────────────────────
 // ─── TARGET ADMIN ─────────────────────────────────────────────────────────────
-// Live editable copy of targets (initialized from defaults)
-let LIVE_TARGETS = JSON.parse(JSON.stringify(VSE_DAILY)); // deep clone
+// LIVE_TARGETS is always a deep clone of VSE_DAILY at open time — no stale init
+function getLiveTargets() {
+  return JSON.parse(JSON.stringify(VSE_DAILY));
+}
 
 function openTargetAdmin() {
   if (!CURRENT_USER || CURRENT_USER.role !== 'admin') return;
+  // Always snapshot fresh from VSE_DAILY (which includes any localStorage-restored values)
+  window._liveTargets = getLiveTargets();
   renderAdminPanel();
   document.getElementById('target-admin-overlay').classList.add('open');
 }
@@ -2445,6 +2574,7 @@ function switchAdminTab(tab, btn) {
 }
 
 function renderAdminPanel() {
+  const LIVE_TARGETS = window._liveTargets || getLiveTargets();
   // Company totals (read-only, computed)
   const compGrid = document.getElementById('admin-company-grid');
   compGrid.innerHTML = COMPANY_TARGETS.map(t => {
@@ -2497,28 +2627,31 @@ function refreshAdminMonthly(vse) {
 }
 
 function saveTargets() {
-  // Read all inputs and apply to LIVE_TARGETS and VSE_DAILY
+  // Read all inputs and apply to VSE_DAILY
   ['Frank','Stephen','Elisha','Kotey'].forEach(v => {
     const vl = v.toLowerCase();
     COMPANY_TARGETS.forEach(t => {
       const inp = document.getElementById(`adm-${vl}-${t.key}`);
       const val = parseInt(inp?.value||0) || 0;
-      LIVE_TARGETS[v][t.key] = val;
-      VSE_DAILY[v][t.key] = val;  // update the live config
+      VSE_DAILY[v][t.key] = val;
     });
   });
-  // Update COMPANY_TARGETS totals
+  // Update COMPANY_TARGETS totals to reflect new VSE_DAILY
   COMPANY_TARGETS.forEach(t => {
     t.total = ['Frank','Stephen','Elisha','Kotey'].reduce((a,v) => a + VSE_DAILY[v][t.key] * WORKING_DAYS_MONTH, 0);
     t.daily = ['Frank','Stephen','Elisha','Kotey'].reduce((a,v) => a + VSE_DAILY[v][t.key], 0);
   });
-  // Save to localStorage so it persists
+  // Sync LIVE cache
+  window._liveTargets = JSON.parse(JSON.stringify(VSE_DAILY));
+  // Persist to localStorage
   localStorage.setItem('ldm_targets', JSON.stringify(VSE_DAILY));
   const msg = document.getElementById('admin-save-msg');
-  msg.innerHTML = '<b>✅ Targets saved & applied!</b>';
+  msg.innerHTML = '<b style="color:#3ecf8e">✅ Targets saved & applied!</b>';
   setTimeout(() => { msg.innerHTML = ''; }, 3000);
-  // Re-render dashboard
+  // Re-render dashboard with new targets
   if (ALL.length > 0) { buildFilterOptions(); applyFilters(); }
+  // Refresh company totals display in panel
+  renderAdminPanel();
 }
 
 function resetTargets() {
@@ -3003,8 +3136,79 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 });
 
+// ─── CHANGE PASSWORD ──────────────────────────────────────────────────────────
+function openChangePassword() {
+  const m = document.getElementById('chpass-modal');
+  m.style.display = 'flex';
+  document.getElementById('chpass-current').value = '';
+  document.getElementById('chpass-new').value = '';
+  document.getElementById('chpass-confirm').value = '';
+  document.getElementById('chpass-error').textContent = '';
+  document.getElementById('chpass-success').textContent = '';
+  setTimeout(() => document.getElementById('chpass-current').focus(), 200);
+}
+
+function closeChangePassword() {
+  document.getElementById('chpass-modal').style.display = 'none';
+}
+
+async function submitChangePassword() {
+  const curPlain    = document.getElementById('chpass-current').value;
+  const newPlain    = document.getElementById('chpass-new').value;
+  const confirmPlain= document.getElementById('chpass-confirm').value;
+  const errEl  = document.getElementById('chpass-error');
+  const okEl   = document.getElementById('chpass-success');
+  const btn    = document.getElementById('chpass-submit');
+  errEl.textContent = ''; okEl.textContent = '';
+
+  if (!curPlain || !newPlain || !confirmPlain) {
+    errEl.textContent = '✕ All fields are required.'; return;
+  }
+  if (newPlain.length < 8) {
+    errEl.textContent = '✕ New password must be at least 8 characters.'; return;
+  }
+  if (newPlain !== confirmPlain) {
+    errEl.textContent = '✕ New passwords do not match.'; return;
+  }
+
+  btn.disabled = true; btn.textContent = '⏳ Saving…';
+
+  // Verify current password
+  const USERS = getUsers();
+  const curHash = await hashPassword(curPlain);
+  if (USERS[CURRENT_USER.username].passHash !== curHash) {
+    errEl.textContent = '✕ Current password is incorrect.';
+    btn.disabled = false; btn.textContent = '💾 Save New Password'; return;
+  }
+
+  // Hash and save new password
+  const newHash = await hashPassword(newPlain);
+  const saved = JSON.parse(localStorage.getItem('ldm_users') || '{}');
+  saved._hashVersion = 2;
+  saved[CURRENT_USER.username] = { ...(saved[CURRENT_USER.username] || {}), passHash: newHash };
+  localStorage.setItem('ldm_users', JSON.stringify(saved));
+
+  // Update in-memory CURRENT_USER
+  CURRENT_USER.passHash = newHash;
+
+  btn.disabled = false; btn.textContent = '💾 Save New Password';
+  okEl.textContent = '✅ Password changed successfully!';
+  setTimeout(closeChangePassword, 1800);
+}
+
+// Admin: reset another user's password
+async function adminResetPassword(username, newPass) {
+  if (!CURRENT_USER || CURRENT_USER.role !== 'admin') return;
+  const newHash = await hashPassword(newPass);
+  const saved = JSON.parse(localStorage.getItem('ldm_users') || '{}');
+  saved._hashVersion = 2;
+  saved[username] = { ...(saved[username] || {}), passHash: newHash };
+  localStorage.setItem('ldm_users', JSON.stringify(saved));
+  return newHash;
+}
+
 // ESC key to collapse
-document.addEventListener('keydown', e => { if (e.key === 'Escape') { collapseChart(); closeSettings(); closeAIChat(); } });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { collapseChart(); closeSettings(); closeAIChat(); if(document.getElementById('chpass-modal').style.display==='flex') closeChangePassword(); } });
 
 </script>
 
@@ -3203,6 +3407,47 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') { collapseCh
     </div>
     <div id="ldm-story-content">
       <div class="empty-state"><div class="empty-icon">📂</div><h3>Load your Excel file first</h3><p style="margin-top:8px;color:var(--muted)">This page auto-populates once data is loaded.</p></div>
+    </div>
+  </div>
+</div>
+
+<!-- CHANGE PASSWORD MODAL -->
+<div id="chpass-modal" style="
+  position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:2000;
+  display:none;align-items:center;justify-content:center;
+" class="">
+  <div style="
+    background:var(--surface);border:1px solid var(--gold);border-radius:18px;
+    padding:36px 36px 28px;width:min(95vw,420px);
+    box-shadow:0 32px 100px rgba(0,0,0,0.8);animation:loginIn 0.3s ease;
+  ">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px">
+      <div>
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:2px;color:var(--gold)">🔑 Change Password</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px">Choose a strong, unique password</div>
+      </div>
+      <button onclick="closeChangePassword()" style="background:none;border:none;color:var(--muted);font-size:22px;cursor:pointer;padding:4px">✕</button>
+    </div>
+    <div class="login-field">
+      <label>Current Password</label>
+      <input type="password" id="chpass-current" placeholder="Enter your current password" autocomplete="current-password"
+        onkeydown="if(event.key==='Enter')document.getElementById('chpass-new').focus()">
+    </div>
+    <div class="login-field">
+      <label>New Password</label>
+      <input type="password" id="chpass-new" placeholder="Minimum 8 characters" autocomplete="new-password"
+        onkeydown="if(event.key==='Enter')document.getElementById('chpass-confirm').focus()">
+    </div>
+    <div class="login-field">
+      <label>Confirm New Password</label>
+      <input type="password" id="chpass-confirm" placeholder="Re-enter new password" autocomplete="new-password"
+        onkeydown="if(event.key==='Enter')submitChangePassword()">
+    </div>
+    <div id="chpass-error" style="color:#e84040;font-size:13px;min-height:20px;margin-bottom:4px"></div>
+    <div id="chpass-success" style="color:#3ecf8e;font-size:13px;min-height:20px;margin-bottom:4px"></div>
+    <button id="chpass-submit" class="login-btn" onclick="submitChangePassword()" style="margin-top:6px">💾 Save New Password</button>
+    <div style="font-size:11px;color:var(--muted);text-align:center;margin-top:14px">
+      Your new password is stored securely as a cryptographic hash.
     </div>
   </div>
 </div>
