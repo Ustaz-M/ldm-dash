@@ -920,41 +920,70 @@ function doLogout() {
 }
 
 // ── GOOGLE SHEETS AUTO-LOAD ───────────────────────────────────────────────────
-function loadFromGoogleSheets() {
+function parseCSV(csv) {
+  return csv.split('\n').map(line => {
+    const result = []; let cur = ''; let inQ = false;
+    for (let i = 0; i < line.length; i++) {
+      if (line[i] === '"') { inQ = !inQ; }
+      else if (line[i] === ',' && !inQ) { result.push(cur.trim()); cur = ''; }
+      else { cur += line[i]; }
+    }
+    result.push(cur.trim());
+    return result;
+  });
+}
+
+async function loadFromGoogleSheets() {
   if (!GOOGLE_SHEET_URL) return;
   const refreshBtn = document.getElementById('btn-refresh-gs');
+  const lastUpd    = document.getElementById('last-update');
   if (refreshBtn) { refreshBtn.textContent = '⏳ Syncing…'; refreshBtn.disabled = true; }
-  document.getElementById('last-update').innerHTML = '⏳ Loading from Google Sheets…';
-  fetch(GOOGLE_SHEET_URL + '&t=' + Date.now()) // cache-bust
-    .then(r => { if (!r.ok) throw new Error('Network error'); return r.text(); })
-    .then(csv => {
-      const rows = csv.split('\n').map(line => {
-        // Parse CSV properly (handles quoted commas)
-        const result = []; let cur = ''; let inQ = false;
-        for (let i = 0; i < line.length; i++) {
-          if (line[i] === '"') { inQ = !inQ; }
-          else if (line[i] === ',' && !inQ) { result.push(cur.trim()); cur = ''; }
-          else { cur += line[i]; }
-        }
-        result.push(cur.trim());
-        return result;
-      });
-      ALL = parse(rows);
-      const now = new Date().toLocaleString('en-GH');
-      document.getElementById('last-update').innerHTML =
-        `✅ Live · Google Sheets<br><span style="color:var(--muted);font-size:10px">Updated ${now}</span>`;
-      if (refreshBtn) { refreshBtn.textContent = '🔄 Refresh'; refreshBtn.disabled = false; }
-      buildFilterOptions();
-      applyFilters();
-    })
-    .catch(err => {
-      document.getElementById('last-update').innerHTML =
-        `<span style="color:#e84040">⚠ Sheet load failed</span><br><span style="font-size:10px;color:var(--muted)">Use Excel upload instead</span>`;
-      if (refreshBtn) { refreshBtn.textContent = '🔄 Refresh'; refreshBtn.disabled = false; }
-      if (CURRENT_USER?.role === 'admin') {
-        console.warn('Google Sheets load error:', err.message);
+  lastUpd.innerHTML = '⏳ Connecting to Google Sheets…';
+
+  // ── Three strategies in order ──────────────────────────────────────────────
+  // 1) Direct (works if browser/server allows CORS)
+  // 2) allorigins.win proxy — reliable, no key needed
+  // 3) corsproxy.io — backup
+  const base = GOOGLE_SHEET_URL + '&t=' + Date.now();
+  const strategies = [
+    { label: 'direct',          url: base },
+    { label: 'allorigins',      url: `https://api.allorigins.win/raw?url=${encodeURIComponent(GOOGLE_SHEET_URL)}` },
+    { label: 'corsproxy',       url: `https://corsproxy.io/?${encodeURIComponent(GOOGLE_SHEET_URL)}` },
+  ];
+
+  let csv = null;
+  let usedLabel = '';
+
+  for (const s of strategies) {
+    try {
+      const r = await fetch(s.url, { cache: 'no-store' });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const text = await r.text();
+      // Validate — real CSV should have commas and multiple lines
+      if (text && text.includes(',') && text.split('\n').length > 1) {
+        csv = text; usedLabel = s.label; break;
       }
-    });
+    } catch(e) {
+      console.warn(`[GSheets] Strategy "${s.label}" failed:`, e.message);
+    }
+  }
+
+  if (refreshBtn) { refreshBtn.textContent = '🔄 Refresh'; refreshBtn.disabled = false; }
+
+  if (!csv) {
+    lastUpd.innerHTML =
+      `<span style="color:#e84040">⚠ Sheet load failed</span><br>` +
+      `<span style="font-size:10px;color:var(--muted)">Check sheet is published · Use Excel upload as backup</span>`;
+    return;
+  }
+
+  ALL = parse(parseCSV(csv));
+  const now = new Date().toLocaleString('en-GH');
+  lastUpd.innerHTML =
+    `✅ Live · Google Sheets<br>` +
+    `<span style="color:var(--muted);font-size:10px">Updated ${now}</span>`;
+  buildFilterOptions();
+  applyFilters();
 }
 
 // ── ROLE GUARD: Enforce VSE filter on every applyFilters call ─────────────────
