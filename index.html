@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
 <title>LDM COM LTD — Sales Dashboard</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
@@ -592,6 +592,154 @@ tr:last-child td{border-bottom:none;}
   display:none; align-items:center; gap:10px;
 }
 .vse-only-banner.show { display:flex; }
+
+/* ══════════════════════════════════════════════════════════
+   RESPONSIVE — iPhone, iPad, and all screen sizes
+   ══════════════════════════════════════════════════════════ */
+
+/* ── Safe area for iPhone notch/home bar ── */
+body {
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
+/* ── TABLET (iPad, up to 1024px) ── */
+@media (max-width: 1024px) {
+  header { padding: 12px 18px; }
+  .logo-text h1 { font-size: 20px; }
+  .header-right { gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+  .settings-btn { padding: 6px 10px; font-size: 11px; }
+  main { padding: 16px 18px; }
+  .filters-bar { padding: 10px 18px; gap: 10px; }
+  .kpi-row { grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .chart-grid-3 { grid-template-columns: 1fr 1fr; }
+  .vsevs-content { padding: 16px 18px; }
+  .ldm-page-body { padding: 16px 18px; }
+}
+
+/* ── MOBILE (iPhone and small phones, up to 600px) ── */
+@media (max-width: 600px) {
+  /* Header */
+  header {
+    padding: 10px 14px;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .logo-icon { width: 36px; height: 36px; font-size: 16px; }
+  .logo-text h1 { font-size: 17px; letter-spacing: 1px; }
+  .logo-text p { font-size: 9px; }
+  .header-right {
+    width: 100%;
+    gap: 6px;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+  .settings-btn { padding: 5px 8px; font-size: 10px; gap: 4px; }
+  .upload-btn { padding: 7px 12px; font-size: 12px; }
+  .last-update { font-size: 10px; }
+
+  /* Filters */
+  .filters-bar {
+    padding: 10px 14px;
+    gap: 8px;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    -webkit-overflow-scrolling: touch;
+  }
+  .filter-group { flex-shrink: 0; }
+  .filter-group select { min-width: 110px; font-size: 12px; padding: 6px 24px 6px 8px; }
+  .filter-summary { display: none; }
+  .reset-btn { flex-shrink: 0; }
+
+  /* Main content */
+  main { padding: 12px 14px; }
+
+  /* KPI cards — 2 columns on phone */
+  .kpi-row { grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 14px; }
+  .kpi-card { padding: 12px 14px; border-radius: 10px; }
+
+  /* Charts — single column */
+  .chart-grid-2,
+  .chart-grid-3 { grid-template-columns: 1fr; gap: 12px; }
+
+  /* VSE cards — single column */
+  .vse-grid { grid-template-columns: 1fr; }
+  .vse-product-grid { grid-template-columns: 1fr; }
+
+  /* Targets grid */
+  .targets-overview { grid-template-columns: 1fr; }
+  .company-targets-grid { grid-template-columns: 1fr 1fr; }
+
+  /* Tables — horizontal scroll */
+  .table-wrap, table {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    display: block;
+    width: 100%;
+  }
+
+  /* Tab buttons — scrollable row */
+  .tab-row {
+    overflow-x: auto;
+    flex-wrap: nowrap !important;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 4px;
+  }
+  .tab-btn { flex-shrink: 0; font-size: 11px; padding: 7px 12px; }
+
+  /* Chart cards */
+  .chart-card { border-radius: 10px; }
+  .chart-card.expanded {
+    top: 2vh !important; left: 2vw !important;
+    width: 96vw !important; height: 92vh !important;
+  }
+
+  /* AI Chat */
+  .ai-chat-panel { width: 100vw !important; min-width: unset !important; }
+  .ai-fab { bottom: 16px; right: 16px; width: 46px; height: 46px; font-size: 19px; }
+
+  /* Settings panel */
+  .settings-panel { width: 100vw !important; right: -100vw !important; }
+  .settings-panel.open { right: 0 !important; }
+
+  /* Admin panel */
+  .admin-panel { padding: 16px; border-radius: 12px; width: 95vw; }
+  .admin-tabs { flex-wrap: wrap; }
+  .admin-grid { grid-template-columns: 1fr 1fr; }
+
+  /* Login screen */
+  .login-box { padding: 28px 20px !important; width: 94vw !important; border-radius: 14px !important; }
+
+  /* VSE vs VSE page */
+  .vsevs-content { padding: 12px 14px; }
+  .vsevs-kpi-row { grid-template-columns: 1fr; }
+  .vsevs-chart-grid { grid-template-columns: 1fr; }
+
+  /* LDM full story page */
+  .ldm-page-header { padding: 12px 14px; flex-wrap: wrap; gap: 8px; }
+  .ldm-page-title { font-size: 18px; }
+  .ldm-page-body { padding: 12px 14px; }
+  .ldm-channel-toggle { flex-wrap: wrap; gap: 6px; }
+
+  /* Cascade section */
+  .cascade-level-body { grid-template-columns: 1fr; }
+  .cascade-chart-col { border-right: none; border-bottom: 1px solid var(--border); }
+
+  /* Change password modal */
+  #chpass-modal > div { padding: 24px 18px !important; width: 94vw !important; }
+
+  /* TOV cards */
+  .tov-grid { grid-template-columns: 1fr !important; }
+}
+
+/* ── VERY SMALL phones (iPhone SE, 375px) ── */
+@media (max-width: 390px) {
+  .kpi-row { grid-template-columns: 1fr 1fr; gap: 6px; }
+  .kpi-card { padding: 10px 10px; }
+  .company-targets-grid { grid-template-columns: 1fr; }
+  .header-right .settings-btn span { display: none; }
+}
 </style>
 </head>
 <body>
