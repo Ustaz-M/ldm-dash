@@ -1,4 +1,4 @@
- <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -735,58 +735,25 @@ async function hashPassword(plain) {
 }
 
 // Default password hashes (pre-computed SHA-256)
-// ldm@admin2024  → hashed below
+// ldm@admin  → hashed below
 // ldm@boss2024   → hashed below
 // frank@ldm2024  → hashed below  etc.
 const DEFAULT_USERS = {
-  admin:   { passHash:'d2f3e4a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6', role:'admin', name:'Admin',   vse:null },
-  boss:    { passHash:'e3f4a5b6c7d8e9f0a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718', role:'boss',  name:'Manager', vse:null },
-  frank:   { passHash:'f4a5b6c7d8e9f0a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f607182', role:'vse',   name:'Frank',   vse:'Frank' },
-  stephen: { passHash:'a5b6c7d8e9f0a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f607182938', role:'vse',  name:'Stephen', vse:'Stephen' },
-  elisha:  { passHash:'b6c7d8e9f0a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b', role:'vse',  name:'Elisha',  vse:'Elisha' },
-  kotey:   { passHash:'c7d8e9f0a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c', role:'vse',  name:'Kotey',   vse:'Kotey' },
+  admin:          { passHash:'4dbd99ac7656fc25567bb6ddb3938ebff6266f8fc9ea19b8518e80150ae63e73', role:'admin', name:'Admin',          vse:null },
+  boss:           { passHash:'13e5d9705abf21851e5a6ccb004f0160fd3da68e4858e4ae3daf9f2f8e504aea', role:'boss',  name:'Manager',        vse:null },
+  salesexecutive: { passHash:'e6167371f421d1a9ad893b67be361517ac091710ce37d82ddcce5f55d9e6121f', role:'boss',  name:'Sales Executive', vse:null },
+  frank:          { passHash:'937a8fcb342a6e27be2f9dd6bb119d1434f875dfbf13035622a1712471406d2b', role:'vse',   name:'Frank',          vse:'Frank' },
+  stephen:        { passHash:'0e0077364e10ed0475e2e06362a033b69a485f92d663f7fa3ce7183b87d9592b', role:'vse',  name:'Stephen',        vse:'Stephen' },
+  elisha:         { passHash:'42640fdab48a6eca92350b5e7d3130e24fd26a414b501a67adf074aef170ac5f', role:'vse',  name:'Elisha',         vse:'Elisha' },
+  kotey:          { passHash:'8d727df334fa4b3bf65d5346c48452578f752d66aee289bc68edf4b6fe90134d', role:'vse',  name:'Kotey',          vse:'Kotey' },
 };
 
-// Live user store — merges defaults with any localStorage overrides
-// Passwords saved as hashes, not plain text
+// Live user store — always use DEFAULT_USERS hardcoded hashes
 function getUsers() {
-  try {
-    const saved = JSON.parse(localStorage.getItem('ldm_users') || '{}');
-    // Deep merge: saved overrides default passHash only
-    const merged = {};
-    Object.keys(DEFAULT_USERS).forEach(u => {
-      merged[u] = { ...DEFAULT_USERS[u] };
-      if (saved[u]?.passHash) merged[u].passHash = saved[u].passHash;
-    });
-    return merged;
-  } catch(e) { return { ...DEFAULT_USERS }; }
+  return { ...DEFAULT_USERS };
 }
 
-// Initialise real hashes on first load (replaces placeholder hashes)
-async function initUserHashes() {
-  const stored = JSON.parse(localStorage.getItem('ldm_users') || '{}');
-  // Only initialise if no real hashes exist yet
-  if (stored._hashVersion === 2) return; // already done
-
-  const defaultPasswords = {
-    admin:'ldm@admin2024', boss:'ldm@boss2024',
-    frank:'frank@ldm2024', stephen:'stephen@ldm2024',
-    elisha:'elisha@ldm2024', kotey:'kotey@ldm2024'
-  };
-  const out = { _hashVersion: 2 };
-  for (const [u, p] of Object.entries(defaultPasswords)) {
-    // Only set if user hasn't already changed their password
-    if (!stored[u]?.passHash) {
-      out[u] = { passHash: await hashPassword(p) };
-    } else {
-      out[u] = { passHash: stored[u].passHash };
-    }
-  }
-  localStorage.setItem('ldm_users', JSON.stringify(out));
-}
-
-// Call on page load
-initUserHashes();
+// initUserHashes removed — hardcoded hashes in DEFAULT_USERS are used directly
 
 // Role colours
 const ROLE_COLORS = { admin:'#f5c842', boss:'#4e9af1', vse:'#3ecf8e' };
@@ -920,41 +887,73 @@ function doLogout() {
 }
 
 // ── GOOGLE SHEETS AUTO-LOAD ───────────────────────────────────────────────────
-function loadFromGoogleSheets() {
+function parseCSV(csv) {
+  return csv.split('\n').map(line => {
+    const result = []; let cur = ''; let inQ = false;
+    for (let i = 0; i < line.length; i++) {
+      if (line[i] === '"') { inQ = !inQ; }
+      else if (line[i] === ',' && !inQ) { result.push(cur.trim()); cur = ''; }
+      else { cur += line[i]; }
+    }
+    result.push(cur.trim());
+    return result;
+  });
+}
+
+async function loadFromGoogleSheets() {
   if (!GOOGLE_SHEET_URL) return;
   const refreshBtn = document.getElementById('btn-refresh-gs');
+  const lastUpd    = document.getElementById('last-update');
   if (refreshBtn) { refreshBtn.textContent = '⏳ Syncing…'; refreshBtn.disabled = true; }
-  document.getElementById('last-update').innerHTML = '⏳ Loading from Google Sheets…';
-  fetch(GOOGLE_SHEET_URL + '&t=' + Date.now()) // cache-bust
-    .then(r => { if (!r.ok) throw new Error('Network error'); return r.text(); })
-    .then(csv => {
-      const rows = csv.split('\n').map(line => {
-        // Parse CSV properly (handles quoted commas)
-        const result = []; let cur = ''; let inQ = false;
-        for (let i = 0; i < line.length; i++) {
-          if (line[i] === '"') { inQ = !inQ; }
-          else if (line[i] === ',' && !inQ) { result.push(cur.trim()); cur = ''; }
-          else { cur += line[i]; }
-        }
-        result.push(cur.trim());
-        return result;
-      });
-      ALL = parse(rows);
-      const now = new Date().toLocaleString('en-GH');
-      document.getElementById('last-update').innerHTML =
-        `✅ Live · Google Sheets<br><span style="color:var(--muted);font-size:10px">Updated ${now}</span>`;
-      if (refreshBtn) { refreshBtn.textContent = '🔄 Refresh'; refreshBtn.disabled = false; }
-      buildFilterOptions();
-      applyFilters();
-    })
-    .catch(err => {
-      document.getElementById('last-update').innerHTML =
-        `<span style="color:#e84040">⚠ Sheet load failed</span><br><span style="font-size:10px;color:var(--muted)">Use Excel upload instead</span>`;
-      if (refreshBtn) { refreshBtn.textContent = '🔄 Refresh'; refreshBtn.disabled = false; }
-      if (CURRENT_USER?.role === 'admin') {
-        console.warn('Google Sheets load error:', err.message);
+  lastUpd.innerHTML = '⏳ Connecting to Google Sheets…';
+
+  // ── Three strategies in order ──────────────────────────────────────────────
+  // 1) Direct (works if browser/server allows CORS)
+  // 2) allorigins.win proxy — reliable, no key needed
+  // 3) corsproxy.io — backup
+  const base = GOOGLE_SHEET_URL + '&t=' + Date.now();
+  const strategies = [
+    { label: 'direct',          url: base },
+    { label: 'direct-clean',    url: GOOGLE_SHEET_URL },
+    { label: 'allorigins',      url: `https://api.allorigins.win/raw?url=${encodeURIComponent(GOOGLE_SHEET_URL)}` },
+    { label: 'corsproxy',       url: `https://corsproxy.io/?${encodeURIComponent(GOOGLE_SHEET_URL)}` },
+    { label: 'codetabs',        url: `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(GOOGLE_SHEET_URL)}` },
+  ];
+
+  let csv = null;
+  let usedLabel = '';
+
+  for (const s of strategies) {
+    try {
+      const r = await fetch(s.url, { cache: 'no-store' });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const text = await r.text();
+      // Validate — real CSV should have commas and multiple lines
+      if (text && text.includes(',') && text.split('\n').length > 1) {
+        csv = text; usedLabel = s.label; break;
       }
-    });
+    } catch(e) {
+      console.warn(`[GSheets] Strategy "${s.label}" failed:`, e.message);
+    }
+  }
+
+  if (refreshBtn) { refreshBtn.textContent = '🔄 Refresh'; refreshBtn.disabled = false; }
+
+  if (!csv) {
+    lastUpd.innerHTML =
+      `<span style="color:#e84040">⚠ Sheet load failed</span><br>` +
+      `<span style="font-size:10px;color:var(--muted)">Open browser Console (F12) to see exact error · Try uploading Excel file instead</span>`;
+    console.error('[GSheets] All fetch strategies failed. Make sure the sheet is published to web as CSV and "Anyone with the link" can view it.');
+    return;
+  }
+
+  ALL = parse(parseCSV(csv));
+  const now = new Date().toLocaleString('en-GH');
+  lastUpd.innerHTML =
+    `✅ Live · Google Sheets<br>` +
+    `<span style="color:var(--muted);font-size:10px">Updated ${now}</span>`;
+  buildFilterOptions();
+  applyFilters();
 }
 
 // ── ROLE GUARD: Enforce VSE filter on every applyFilters call ─────────────────
@@ -3184,7 +3183,7 @@ async function submitChangePassword() {
   // Hash and save new password
   const newHash = await hashPassword(newPlain);
   const saved = JSON.parse(localStorage.getItem('ldm_users') || '{}');
-  saved._hashVersion = 2;
+  saved._hashVersion = 3;
   saved[CURRENT_USER.username] = { ...(saved[CURRENT_USER.username] || {}), passHash: newHash };
   localStorage.setItem('ldm_users', JSON.stringify(saved));
 
@@ -3201,7 +3200,7 @@ async function adminResetPassword(username, newPass) {
   if (!CURRENT_USER || CURRENT_USER.role !== 'admin') return;
   const newHash = await hashPassword(newPass);
   const saved = JSON.parse(localStorage.getItem('ldm_users') || '{}');
-  saved._hashVersion = 2;
+  saved._hashVersion = 3;
   saved[username] = { ...(saved[username] || {}), passHash: newHash };
   localStorage.setItem('ldm_users', JSON.stringify(saved));
   return newHash;
