@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+ <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -584,6 +584,23 @@ tr:last-child td{border-bottom:none;}
 .ch-btn.active.vip   { border-color:#9b6dff; color:#9b6dff; background:rgba(155,109,255,0.08); }
 .ch-btn.active.all   { border-color:#3ecf8e; color:#3ecf8e; background:rgba(62,207,142,0.08); }
 
+/* ── LDM FILTERS BAR ── */
+.ldm-filters-bar {
+  background:linear-gradient(90deg,rgba(62,207,142,0.06),transparent);
+  border-bottom:1px solid rgba(62,207,142,0.2);
+  padding:10px 28px; display:flex; gap:14px; align-items:flex-end; flex-wrap:wrap;
+  flex-shrink:0;
+}
+.ldm-filters-bar .filter-group select:focus { border-color:#3ecf8e; }
+.ldm-filters-bar .filter-group select.filter-active { border-color:#3ecf8e !important; color:#3ecf8e !important; }
+.ldm-filters-bar .reset-btn:hover { border-color:#3ecf8e; color:#3ecf8e; }
+/* Section dividers for LDM page */
+.ldm-section-divider {
+  display:flex; align-items:center; gap:14px; margin:28px 0 16px;
+  padding-bottom:10px; border-bottom:1px solid rgba(62,207,142,0.2);
+}
+.ldm-section-divider h2 { font-family:'Bebas Neue',sans-serif; font-size:20px; letter-spacing:2px; color:#3ecf8e; }
+
 /* ── VSE-ONLY BANNER ── */
 .vse-only-banner {
   background:linear-gradient(90deg,rgba(62,207,142,0.12),transparent);
@@ -721,6 +738,8 @@ body {
   .ldm-page-title { font-size: 18px; }
   .ldm-page-body { padding: 12px 14px; }
   .ldm-channel-toggle { flex-wrap: wrap; gap: 6px; }
+  .ldm-filters-bar { padding: 10px 14px; gap: 8px; overflow-x:auto; flex-wrap:nowrap; -webkit-overflow-scrolling:touch; }
+  .ldm-kpi-row { grid-template-columns: 1fr 1fr !important; }
 
   /* Cascade section */
   .cascade-level-body { grid-template-columns: 1fr; }
@@ -806,7 +825,7 @@ body {
     <button class="settings-btn" onclick="openSettings()" title="Appearance">⚙ Appearance</button>
     <button class="settings-btn" onclick="openVseVs()" title="VSE A vs VSE B" style="border-color:var(--gold);color:var(--gold)" id="btn-vsevs">⚔ VSE vs VSE</button>
     <button class="settings-btn" onclick="openLdmStory()" title="LDM Full Story" style="border-color:#3ecf8e;color:#3ecf8e" id="btn-ldm-story">🏢 LDM Full Story</button>
-    <button class="settings-btn" onclick="openTargetAdmin()" title="Edit Targets" style="border-color:#4e9af1;color:#4e9af1;display:none" id="btn-target-admin">🎯 Edit Targets</button>
+    <button class="settings-btn" onclick="openTargetAdmin()" title="Edit Targets" style="border-color:#4e9af1;color:#4e9af1;" id="btn-target-admin">🎯 Targets</button>
     <button class="upload-btn" id="btn-upload" onclick="document.getElementById('file-input').click()" style="display:none">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
       Load Excel
@@ -1127,10 +1146,12 @@ const COMPANY_TARGETS = [
   { key:'gulder',   label:'Gulder Lager',       total:2340, daily:90,  keywords:['gulder'] },
   { key:'abc',      label:'ABC Golden Lager',   total:3120, daily:120, keywords:['abc golden'] },
   { key:'smirnoff', label:'Smirnoff Ice',       total:1560, daily:60,  keywords:['smir ice'] },
-  { key:'orijin',   label:'Orijin 625ml',       total:3380, daily:130, keywords:['orijin  625','orijin 625'] },
-  { key:'mg',       label:'Malta Guinness Can', total:4680, daily:180, keywords:['malta guinness 330ml 24x01 can','malta guinness 330ml 12x01'] },
-  { key:'mgpet',    label:'MG PET',             total:4680, daily:180, keywords:['guinness malta  330ml pet'] },
-  { key:'mgret',    label:'MG RET',             total:4420, daily:170, keywords:['guinness malta  330ml ret','mg ret','mgret'] },
+  { key:'orijin',   label:'Orijin 625ml',       total:3380, daily:130, keywords:['orijin 625'] },
+  { key:'mg',       label:'Malta Guinness Can', total:4680, daily:180, keywords:['malta guinness 330ml 24x01 can','malta guinness can 24'] },
+  // MG RET = Guinness Malta RET 24 x 01
+  { key:'mgret',    label:'MG RET',             total:4420, daily:170, keywords:['guinness malta 330ml ret 24','guinness malta ret 24','malta guinness ret 24','mg ret','mgret'] },
+  // MG PET = Guinness Malta 330ml PET 12X01
+  { key:'mgpet',    label:'MG PET',             total:4680, daily:180, keywords:['guinness malta 330ml pet','malta guinness pet','mgpet'] },
 ];
 
 // Per-VSE FIXED daily targets (rounded to nearest 10)
@@ -1182,9 +1203,10 @@ function getVseWeeklyTargets() {
 
 // Match a product string to a target key
 function matchTarget(productName) {
-  const p = productName.toLowerCase();
+  // Normalize: lowercase + collapse all whitespace to single space
+  const p = productName.toLowerCase().replace(/\s+/g, ' ').trim();
   for (const t of COMPANY_TARGETS) {
-    if (t.keywords.some(kw => p.includes(kw.toLowerCase()))) return t.key;
+    if (t.keywords.some(kw => p.includes(kw.toLowerCase().replace(/\s+/g, ' ').trim()))) return t.key;
   }
   return null;
 }
@@ -1384,7 +1406,7 @@ function applyFilters() {
 
   render();
   // Refresh LDM Full Story if it's open
-  if (document.getElementById('ldm-story-overlay')?.classList.contains('open')) renderLdmStory();
+  if (document.getElementById('ldm-story-overlay')?.classList.contains('open')) ldmApplyFilters();
 }
 
 function resetFilters() {
@@ -2704,7 +2726,11 @@ function getLiveTargets() {
 }
 
 function openTargetAdmin() {
-  if (!CURRENT_USER || CURRENT_USER.role !== 'admin') return;
+  if (!CURRENT_USER) { alert('Please log in first.'); return; }
+  if (CURRENT_USER.role !== 'admin') {
+    alert('🔒 Target editing requires Admin access.\n\nContact your system admin to update targets.');
+    return;
+  }
   // Always snapshot fresh from VSE_DAILY (which includes any localStorage-restored values)
   window._liveTargets = getLiveTargets();
   renderAdminPanel();
@@ -2827,12 +2853,16 @@ function resetTargets() {
 
 // ─── LDM FULL STORY PAGE ──────────────────────────────────────────────────────
 let LDM_CHARTS = {};
-let LDM_CHANNEL = 'all'; // 'all' | 'VSE' | 'VIP'
+let LDM_CHANNEL = 'all'; // kept for backward compat — now driven by ldm-f-channel select
+let LDM_DATA = [];       // filtered subset for LDM page
 
 function openLdmStory() {
   document.getElementById('ldm-story-overlay').classList.add('open');
   document.body.style.overflow = 'hidden';
-  if (ALL.length > 0) renderLdmStory();
+  if (ALL.length > 0) {
+    ldmBuildFilterOptions();
+    ldmApplyFilters();
+  }
 }
 function closeLdmStory() {
   document.getElementById('ldm-story-overlay').classList.remove('open');
@@ -2840,11 +2870,68 @@ function closeLdmStory() {
   Object.values(LDM_CHARTS).forEach(c => { try { c.destroy(); } catch(e){} });
   LDM_CHARTS = {};
 }
+
+// Legacy channel toggle — now controlled by select dropdown
 function ldmSetChannel(ch, btn) {
-  LDM_CHANNEL = ch;
-  document.querySelectorAll('.ch-btn').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  if (ALL.length > 0) renderLdmStory();
+  const sel = document.getElementById('ldm-f-channel');
+  if (sel) sel.value = ch;
+  ldmApplyFilters();
+}
+
+function ldmBuildFilterOptions() {
+  const months = [...new Set(ALL.map(r=>r.month))].filter(Boolean).sort((a,b) => {
+    const ak = ALL.find(r=>r.month===a)?.monthKey||'';
+    const bk = ALL.find(r=>r.month===b)?.monthKey||'';
+    return ak.localeCompare(bk);
+  });
+  const weeks = [...new Set(ALL.map(r=>r.weekLabel))].filter(Boolean).sort((a,b) => parseInt(a.slice(1)) - parseInt(b.slice(1)));
+  const dates = [...new Set(ALL.map(r=>r.dateOnly))].filter(Boolean).sort().reverse();
+
+  const fill = (id, vals, ph) => {
+    const sel = document.getElementById(id); if (!sel) return;
+    const cur = sel.value;
+    sel.innerHTML = `<option value="">${ph}</option>` + vals.map(v=>`<option value="${v}"${v===cur?' selected':''}>${v}</option>`).join('');
+  };
+  fill('ldm-f-month', months, 'All Months');
+  fill('ldm-f-week',  weeks,  'All Weeks');
+  fill('ldm-f-date',  dates,  'All Dates');
+}
+
+function ldmApplyFilters() {
+  const ch    = document.getElementById('ldm-f-channel')?.value || 'all';
+  const month = document.getElementById('ldm-f-month')?.value   || '';
+  const week  = document.getElementById('ldm-f-week')?.value    || '';
+  const date  = document.getElementById('ldm-f-date')?.value    || '';
+
+  ['ldm-f-channel','ldm-f-month','ldm-f-week','ldm-f-date'].forEach(id => {
+    const el = document.getElementById(id); if (!el) return;
+    el.classList.toggle('filter-active', el.value !== '' && el.value !== 'all');
+  });
+
+  LDM_DATA = ALL.filter(r => {
+    if (ch && ch !== 'all' && r.channel !== ch) return false;
+    if (month && r.month     !== month) return false;
+    if (week  && r.weekLabel !== week)  return false;
+    if (date  && r.dateOnly  !== date)  return false;
+    return true;
+  });
+
+  const active = [ch!=='all'?ch:'',month,week,date].filter(Boolean).length;
+  const sumEl = document.getElementById('ldm-filter-summary');
+  if (sumEl) sumEl.innerHTML = LDM_DATA.length > 0
+    ? `Showing <span>${LDM_DATA.length}</span> of ${ALL.length} records${active?' · '+active+' filter'+(active>1?'s':'')+' active':''}`
+    : `<span style="color:var(--kotey)">No records match filters</span>`;
+
+  renderLdmStory();
+}
+
+function ldmResetFilters() {
+  ['ldm-f-channel','ldm-f-month','ldm-f-week','ldm-f-date'].forEach(id => {
+    const el = document.getElementById(id); if (!el) return;
+    el.value = id === 'ldm-f-channel' ? 'all' : '';
+    el.classList.remove('filter-active');
+  });
+  ldmApplyFilters();
 }
 
 function renderLdmStory() {
@@ -2852,171 +2939,342 @@ function renderLdmStory() {
   Object.values(LDM_CHARTS).forEach(c => { try { c.destroy(); } catch(e){} });
   LDM_CHARTS = {};
 
-  // Filter by channel
-  const base = LDM_CHANNEL === 'all' ? ALL
-    : LDM_CHANNEL === 'VIP' ? ALL.filter(r => r.channel === 'VIP')
-    : ALL.filter(r => r.channel === 'VSE');
+  const base    = LDM_DATA.length > 0 ? LDM_DATA : ALL;
+  const ch      = document.getElementById('ldm-f-channel')?.value || 'all';
 
-  const vseData = ALL.filter(r => r.channel === 'VSE');
-  const vipData = ALL.filter(r => r.channel === 'VIP');
+  const vseData = base.filter(r => r.channel === 'VSE');
+  const vipData = base.filter(r => r.channel === 'VIP');
 
-  const totalQty   = sum(base, 'qty');
-  const totalRev   = sum(base, 'total');
-  const vseQty     = sum(vseData, 'qty');
-  const vipQty     = sum(vipData, 'qty');
-  const vseRev     = sum(vseData, 'total');
-  const vipRev     = sum(vipData, 'total');
+  const totalQty = sum(base, 'qty');
+  const totalRev = sum(base, 'total');
+  const vseQty   = sum(vseData, 'qty');
+  const vipQty   = sum(vipData, 'qty');
+  const vseRev   = sum(vseData, 'total');
+  const vipRev   = sum(vipData, 'total');
+
+  // Per-VSE stats for VSE channel
+  const vseStats = {};
+  VSEs.forEach(v => {
+    const rows = vseData.filter(r => r.vse === v);
+    vseStats[v] = { qty: sum(rows,'qty'), rev: sum(rows,'total'), txns: rows.length };
+  });
 
   // VIP customers
   const vipCustomers = [...new Set(vipData.map(r => r.customer))];
   const vipCustQty = {};
-  vipCustomers.forEach(c => { vipCustQty[c] = sum(vipData.filter(r => r.customer === c), 'qty'); });
-  const topVips = Object.entries(vipCustQty).sort((a,b) => b[1]-a[1]).slice(0, 10);
+  vipCustomers.forEach(c => { vipCustQty[c] = sum(vipData.filter(r=>r.customer===c),'qty'); });
+  const topVips = Object.entries(vipCustQty).sort((a,b)=>b[1]-a[1]).slice(0,12);
 
-  // Products in base
-  const prodQty = {};
-  base.forEach(r => { const p = r.product.trim(); prodQty[p] = (prodQty[p]||0) + r.qty; });
-  const topProds = Object.entries(prodQty).sort((a,b) => b[1]-a[1]).slice(0,12);
+  // Products per channel
+  const vseProdQty = {}, vipProdQty = {};
+  vseData.forEach(r => { const p=r.product.trim(); vseProdQty[p]=(vseProdQty[p]||0)+r.qty; });
+  vipData.forEach(r => { const p=r.product.trim(); vipProdQty[p]=(vipProdQty[p]||0)+r.qty; });
+  const topVseProds = Object.entries(vseProdQty).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  const topVipProds = Object.entries(vipProdQty).sort((a,b)=>b[1]-a[1]).slice(0,10);
 
-  // Dates
-  const dates = [...new Set(base.map(r => r.dateOnly))].filter(Boolean).sort();
+  // All products across both channels
+  const allProdQty = {};
+  base.forEach(r => { const p=r.product.trim(); allProdQty[p]=(allProdQty[p]||0)+r.qty; });
+  const topAllProds = Object.entries(allProdQty).sort((a,b)=>b[1]-a[1]).slice(0,10);
 
-  document.getElementById('ldm-story-update').textContent = `${base.length} records · ${LDM_CHANNEL === 'all' ? 'All channels' : LDM_CHANNEL + ' only'}`;
+  // Dates for trend charts
+  const allDates = [...new Set(base.map(r=>r.dateOnly))].filter(Boolean).sort();
+  const weeks    = [...new Set(base.map(r=>r.weekLabel))].filter(Boolean).sort((a,b)=>parseInt(a.slice(1))-parseInt(b.slice(1)));
+  const months   = [...new Set(base.map(r=>r.month))].filter(Boolean).sort((a,b)=>{
+    const ak = base.find(r2=>r2.month===a)?.monthKey||''; const bk = base.find(r2=>r2.month===b)?.monthKey||'';
+    return ak.localeCompare(bk);
+  });
+
+  const channelLabel = ch==='all' ? 'All Channels' : ch==='VSE' ? 'VSE Only' : 'LDM VIPs Only';
+  document.getElementById('ldm-story-update').textContent = `${base.length} records · ${channelLabel}`;
+
+  // ── Helper: channel-aware VSE name ──
+  const vsePct = v => vseStats[v].qty > 0 && vseQty > 0 ? (vseStats[v].qty/vseQty*100).toFixed(0)+'%' : '0%';
 
   document.getElementById('ldm-story-content').innerHTML = `
-    <!-- KPI Row -->
-    <div class="ldm-kpi-row">
-      <div class="ldm-kpi total">
-        <div class="ldm-kpi-label">Total Units (All Channels)</div>
-        <div class="ldm-kpi-val" style="color:var(--gold)">${totalQty.toLocaleString()}</div>
-        <div class="ldm-kpi-sub">Revenue: ¢${(totalRev/1000).toFixed(1)}K</div>
-      </div>
-      <div class="ldm-kpi">
-        <div class="ldm-kpi-label">VSE Channel</div>
-        <div class="ldm-kpi-val" style="color:var(--gold)">${vseQty.toLocaleString()}</div>
-        <div class="ldm-kpi-sub">${totalQty>0?(vseQty/totalQty*100).toFixed(0):0}% of total · ¢${(vseRev/1000).toFixed(1)}K</div>
-      </div>
-      <div class="ldm-kpi vip">
-        <div class="ldm-kpi-label">LDM VIP Direct</div>
-        <div class="ldm-kpi-val" style="color:#9b6dff">${vipQty.toLocaleString()}</div>
-        <div class="ldm-kpi-sub">${totalQty>0?(vipQty/totalQty*100).toFixed(0):0}% of total · ¢${(vipRev/1000).toFixed(1)}K · ${vipCustomers.length} customers</div>
-      </div>
-      <div class="ldm-kpi" style="border-left-color:#4e9af1">
-        <div class="ldm-kpi-label">Avg Units / Day</div>
-        <div class="ldm-kpi-val" style="color:#4e9af1">${dates.length>0?Math.round(totalQty/dates.length).toLocaleString():'—'}</div>
-        <div class="ldm-kpi-sub">Over ${dates.length} active days</div>
-      </div>
-    </div>
 
-    <!-- Channel split + product charts -->
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:18px">
-      <div class="chart-card" style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px">
-        <div class="chart-title">VSE vs LDM VIP — Units Split</div>
-        <div class="chart-sub">Share of total volume by channel</div>
-        <canvas id="ldm-c-channel-pie" style="max-height:240px"></canvas>
-      </div>
-      <div class="chart-card" style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px">
-        <div class="chart-title">Top LDM VIP Customers</div>
-        <div class="chart-sub">Direct customers ranked by units</div>
-        <canvas id="ldm-c-vip-bar" style="max-height:240px"></canvas>
-      </div>
+  <!-- ═══ KPI SUMMARY ROW ═══════════════════════════════════════════════════ -->
+  <div class="ldm-kpi-row" style="grid-template-columns:repeat(5,1fr)">
+    <div class="ldm-kpi total">
+      <div class="ldm-kpi-label">🏢 Total Units</div>
+      <div class="ldm-kpi-val" style="color:var(--gold)">${totalQty.toLocaleString()}</div>
+      <div class="ldm-kpi-sub">Rev: ¢${(totalRev/1000).toFixed(1)}K · ${base.length} records</div>
     </div>
-
-    <!-- Daily trend: all channels -->
-    <div class="chart-card" style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px;margin-bottom:18px">
-      <div class="chart-title">Daily Units — VSE vs LDM VIPs Over Time</div>
-      <div class="chart-sub">See how both channels contribute to daily totals</div>
-      <canvas id="ldm-c-daily" style="max-height:260px"></canvas>
+    <div class="ldm-kpi">
+      <div class="ldm-kpi-label">👥 VSE Channel</div>
+      <div class="ldm-kpi-val" style="color:#f5c842">${vseQty.toLocaleString()}</div>
+      <div class="ldm-kpi-sub">${totalQty>0?(vseQty/totalQty*100).toFixed(0):0}% of total · ¢${(vseRev/1000).toFixed(1)}K</div>
     </div>
-
-    <!-- Top products: filtered channel -->
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:18px">
-      <div class="chart-card" style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px">
-        <div class="chart-title">Top Products — ${LDM_CHANNEL==='all'?'All Channels':LDM_CHANNEL}</div>
-        <div class="chart-sub">Units by product for selected channel</div>
-        <canvas id="ldm-c-prod" style="max-height:280px"></canvas>
-      </div>
-      <div class="chart-card" style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px">
-        <div class="chart-title">Revenue Split by Channel</div>
-        <div class="chart-sub">VSE vs VIP revenue comparison</div>
-        <canvas id="ldm-c-rev-bar" style="max-height:280px"></canvas>
-      </div>
+    <div class="ldm-kpi vip">
+      <div class="ldm-kpi-label">⭐ LDM VIP Direct</div>
+      <div class="ldm-kpi-val" style="color:#9b6dff">${vipQty.toLocaleString()}</div>
+      <div class="ldm-kpi-sub">${totalQty>0?(vipQty/totalQty*100).toFixed(0):0}% of total · ¢${(vipRev/1000).toFixed(1)}K</div>
     </div>
+    <div class="ldm-kpi" style="border-left-color:#4e9af1">
+      <div class="ldm-kpi-label">📅 Active Days</div>
+      <div class="ldm-kpi-val" style="color:#4e9af1">${allDates.length}</div>
+      <div class="ldm-kpi-sub">${allDates.length>0?Math.round(totalQty/allDates.length).toLocaleString():0} avg units/day</div>
+    </div>
+    <div class="ldm-kpi" style="border-left-color:#3ecf8e">
+      <div class="ldm-kpi-label">🏅 VIP Customers</div>
+      <div class="ldm-kpi-val" style="color:#3ecf8e">${vipCustomers.length}</div>
+      <div class="ldm-kpi-sub">${vipQty>0&&vipCustomers.length>0?Math.round(vipQty/vipCustomers.length).toLocaleString():0} avg units/customer</div>
+    </div>
+  </div>
 
-    <!-- VIP customer table -->
-    ${vipCustomers.length > 0 ? `
-    <div class="table-card" style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px;margin-bottom:18px">
-      <div class="chart-title" style="margin-bottom:4px">LDM VIP Customer Directory</div>
-      <div class="chart-sub" style="margin-bottom:14px">${vipCustomers.length} direct customers · not assigned to any VSE</div>
-      <div style="overflow-x:auto">
-        <table style="width:100%;border-collapse:collapse;font-size:13px">
-          <thead><tr>
-            <th style="text-align:left;padding:8px 12px;color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:1px;border-bottom:1px solid var(--border)">Customer</th>
-            <th style="text-align:right;padding:8px 12px;color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:1px;border-bottom:1px solid var(--border)">Units</th>
-            <th style="text-align:right;padding:8px 12px;color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:1px;border-bottom:1px solid var(--border)">Revenue</th>
-            <th style="text-align:right;padding:8px 12px;color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:1px;border-bottom:1px solid var(--border)">Transactions</th>
-            <th style="text-align:right;padding:8px 12px;color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:1px;border-bottom:1px solid var(--border)">% of VIP Total</th>
-          </tr></thead>
-          <tbody>
-            ${Object.entries(vipCustQty).sort((a,b)=>b[1]-a[1]).map(([c,q]) => {
-              const rev = sum(vipData.filter(r=>r.customer===c),'total');
-              const txns = vipData.filter(r=>r.customer===c).length;
-              const pct = vipQty > 0 ? (q/vipQty*100).toFixed(1) : 0;
-              return `<tr style="border-bottom:1px solid rgba(255,255,255,0.04)">
-                <td style="padding:8px 12px;color:var(--text);font-weight:600">${c}</td>
-                <td style="padding:8px 12px;text-align:right;font-weight:700;color:#9b6dff">${q.toLocaleString()}</td>
-                <td style="padding:8px 12px;text-align:right;color:var(--muted)">¢${rev.toLocaleString('en-GH',{maximumFractionDigits:0})}</td>
-                <td style="padding:8px 12px;text-align:right;color:var(--muted)">${txns}</td>
-                <td style="padding:8px 12px;text-align:right;color:var(--gold)">${pct}%</td>
-              </tr>`;
-            }).join('')}
-          </tbody>
-        </table>
-      </div>
-    </div>` : `<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:24px;text-align:center;color:var(--muted);margin-bottom:18px">No LDM VIP customers found in current data. Non-VSE customers will appear here automatically.</div>`}
+  <!-- ═══ VSE MINI-CARDS (like VSE main page) ══════════════════════════════ -->
+  <div class="ldm-section-divider"><h2>👥 VSE Breakdown</h2></div>
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:22px">
+    ${VSEs.map((v,i) => {
+      const s = vseStats[v];
+      const pct = vseQty>0 ? (s.qty/vseQty*100).toFixed(1) : 0;
+      const rank = [...VSEs].sort((a,b)=>vseStats[b].qty-vseStats[a].qty).indexOf(v)+1;
+      const medalColor = rank===1?'var(--gold)':rank===2?'#888':rank===3?'#cd7f32':'var(--border)';
+      const medalLabel = rank===1?'🥇':rank===2?'🥈':rank===3?'🥉':`#${rank}`;
+      return `<div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px;position:relative;overflow:hidden">
+        <div style="position:absolute;top:0;left:0;right:0;height:3px;background:${COLORS[v]}"></div>
+        <div style="position:absolute;top:14px;right:14px;font-size:18px">${medalLabel}</div>
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:24px;letter-spacing:2px;color:${COLORS[v]};margin-bottom:10px">${v}</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <div><div style="font-size:20px;font-weight:700;color:var(--gold)">${s.qty.toLocaleString()}</div><div style="font-size:10px;color:var(--muted);text-transform:uppercase">Units</div></div>
+          <div><div style="font-size:14px;font-weight:600;color:var(--text)">¢${(s.rev/1000).toFixed(1)}K</div><div style="font-size:10px;color:var(--muted);text-transform:uppercase">Revenue</div></div>
+          <div><div style="font-size:14px;font-weight:600">${s.txns}</div><div style="font-size:10px;color:var(--muted);text-transform:uppercase">Transactions</div></div>
+          <div><div style="font-size:14px;font-weight:600;color:#3ecf8e">${pct}%</div><div style="font-size:10px;color:var(--muted);text-transform:uppercase">VSE Share</div></div>
+        </div>
+        <div style="height:4px;background:var(--border);border-radius:2px;margin-top:12px">
+          <div style="height:100%;border-radius:2px;background:${COLORS[v]};width:${pct}%;transition:width 0.7s ease"></div>
+        </div>
+      </div>`;
+    }).join('')}
+  </div>
+
+  <!-- ═══ CHANNEL SPLIT CHARTS ══════════════════════════════════════════════ -->
+  <div class="ldm-section-divider"><h2>📊 VIPs vs VSE — Channel Story</h2></div>
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:18px;margin-bottom:18px">
+    <div class="chart-card" style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px">
+      <div class="chart-title">Units Split — VSE vs VIPs</div>
+      <div class="chart-sub">Share of total volume by channel</div>
+      <canvas id="ldm-c-channel-pie" style="max-height:230px"></canvas>
+    </div>
+    <div class="chart-card" style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px">
+      <div class="chart-title">Revenue Split — VSE vs VIPs</div>
+      <div class="chart-sub">Revenue contribution by channel</div>
+      <canvas id="ldm-c-rev-pie" style="max-height:230px"></canvas>
+    </div>
+    <div class="chart-card" style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px">
+      <div class="chart-title">VSE Share of VSE Channel</div>
+      <div class="chart-sub">Who drives VSE channel sales</div>
+      <canvas id="ldm-c-vse-pie" style="max-height:230px"></canvas>
+    </div>
+  </div>
+
+  <!-- VSE vs VIP channel bar comparison -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:18px">
+    <div class="chart-card" style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px">
+      <div class="chart-title">VSE Performance — Units</div>
+      <div class="chart-sub">Each VSE's contribution to the VSE channel</div>
+      <canvas id="ldm-c-vse-bar" style="max-height:240px"></canvas>
+    </div>
+    <div class="chart-card" style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px">
+      <div class="chart-title">Top LDM VIP Customers</div>
+      <div class="chart-sub">Direct customers ranked by units</div>
+      <canvas id="ldm-c-vip-bar" style="max-height:240px"></canvas>
+    </div>
+  </div>
+
+  <!-- ═══ TREND OVER TIME ════════════════════════════════════════════════════ -->
+  <div class="ldm-section-divider"><h2>📈 Trends Over Time</h2></div>
+  <div class="chart-card" style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px;margin-bottom:18px">
+    <div class="chart-title">Daily Units — VSE vs LDM VIPs Over Time</div>
+    <div class="chart-sub">Stacked bars show how both channels contribute each day</div>
+    <canvas id="ldm-c-daily" style="max-height:280px"></canvas>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:18px">
+    <div class="chart-card" style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px">
+      <div class="chart-title">Weekly Trend — VSE vs VIP</div>
+      <div class="chart-sub">Units sold per week by channel</div>
+      <canvas id="ldm-c-weekly" style="max-height:240px"></canvas>
+    </div>
+    <div class="chart-card" style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px">
+      <div class="chart-title">Monthly Trend — VSE vs VIP</div>
+      <div class="chart-sub">Units sold per month by channel</div>
+      <canvas id="ldm-c-monthly" style="max-height:240px"></canvas>
+    </div>
+  </div>
+
+  <!-- ═══ PRODUCT ANALYSIS ══════════════════════════════════════════════════ -->
+  <div class="ldm-section-divider"><h2>📦 Product Analysis</h2></div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:18px">
+    <div class="chart-card" style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px">
+      <div class="chart-title">Top Products — VSE Channel</div>
+      <div class="chart-sub">What VSEs are selling most</div>
+      <canvas id="ldm-c-vse-prods" style="max-height:280px"></canvas>
+    </div>
+    <div class="chart-card" style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px">
+      <div class="chart-title">Top Products — LDM VIP Channel</div>
+      <div class="chart-sub">What VIP customers are buying most</div>
+      <canvas id="ldm-c-vip-prods" style="max-height:280px"></canvas>
+    </div>
+  </div>
+
+  <!-- Products side-by-side VSE vs VIP -->
+  <div class="chart-card" style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px;margin-bottom:18px">
+    <div class="chart-title">Product Volume — VSE vs VIP Side-by-Side</div>
+    <div class="chart-sub">See which products each channel favours</div>
+    <canvas id="ldm-c-prod-compare" style="max-height:320px"></canvas>
+  </div>
+
+  <!-- ═══ VIP CUSTOMER DIRECTORY ═════════════════════════════════════════════ -->
+  ${vipCustomers.length > 0 ? `
+  <div class="ldm-section-divider"><h2>⭐ LDM VIP Customer Directory</h2></div>
+  <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px;margin-bottom:18px">
+    <div class="chart-sub" style="margin-bottom:14px">${vipCustomers.length} direct customers · not assigned to any VSE</div>
+    <div style="overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead><tr>
+          <th style="text-align:left;padding:8px 12px;color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:1px;border-bottom:1px solid var(--border)">Customer</th>
+          <th style="text-align:right;padding:8px 12px;color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:1px;border-bottom:1px solid var(--border)">Units</th>
+          <th style="text-align:right;padding:8px 12px;color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:1px;border-bottom:1px solid var(--border)">Revenue</th>
+          <th style="text-align:right;padding:8px 12px;color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:1px;border-bottom:1px solid var(--border)">Transactions</th>
+          <th style="text-align:right;padding:8px 12px;color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:1px;border-bottom:1px solid var(--border)">% of VIP Total</th>
+        </tr></thead>
+        <tbody>
+          ${Object.entries(vipCustQty).sort((a,b)=>b[1]-a[1]).map(([c,q]) => {
+            const rev = sum(vipData.filter(r=>r.customer===c),'total');
+            const txns = vipData.filter(r=>r.customer===c).length;
+            const pct = vipQty>0?(q/vipQty*100).toFixed(1):0;
+            return `<tr style="border-bottom:1px solid rgba(255,255,255,0.04)">
+              <td style="padding:8px 12px;color:var(--text);font-weight:600">${c}</td>
+              <td style="padding:8px 12px;text-align:right;font-weight:700;color:#9b6dff">${q.toLocaleString()}</td>
+              <td style="padding:8px 12px;text-align:right;color:var(--muted)">¢${rev.toLocaleString('en-GH',{maximumFractionDigits:0})}</td>
+              <td style="padding:8px 12px;text-align:right;color:var(--muted)">${txns}</td>
+              <td style="padding:8px 12px;text-align:right;color:var(--gold)">${pct}%</td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+  </div>` : ''}
   `;
 
-  // Draw charts
-  const allDates = [...new Set(ALL.map(r=>r.dateOnly))].filter(Boolean).sort();
+  // ── CHARTS ────────────────────────────────────────────────────────────────
+  const lo = legendOpts;
+  const tq = tooltipQty;
 
-  // Channel pie
-  LDM_CHARTS.pie = new Chart(document.getElementById('ldm-c-channel-pie'), {
+  // 1. Units doughnut — VSE vs VIP
+  LDM_CHARTS.chPie = new Chart(document.getElementById('ldm-c-channel-pie'), {
     type:'doughnut',
-    data:{ labels:['VSE Channel','LDM VIPs'], datasets:[{ data:[vseQty,vipQty], backgroundColor:['#f5c84299','#9b6dff99'], borderColor:['#f5c842','#9b6dff'], borderWidth:2, hoverOffset:8 }] },
-    options:{ responsive:true, plugins:{ legend:legendOpts, tooltip:{ callbacks:{ label: ctx=>`${ctx.label}: ${ctx.raw.toLocaleString()} units (${totalQty>0?(ctx.raw/totalQty*100).toFixed(1):0}%)` } } } }
+    data:{ labels:['VSE Channel','LDM VIPs'], datasets:[{ data:[vseQty,vipQty],
+      backgroundColor:['#f5c84299','#9b6dff99'], borderColor:['#f5c842','#9b6dff'], borderWidth:2.5, hoverOffset:8 }] },
+    options:{ responsive:true, cutout:'58%',
+      plugins:{ legend:lo, tooltip:{ callbacks:{ label:ctx=>`${ctx.label}: ${ctx.raw.toLocaleString()} units (${totalQty>0?(ctx.raw/totalQty*100).toFixed(1):0}%)` } },
+        datalabels:{ color:'#fff', font:{weight:'bold',size:12,family:'DM Sans'}, formatter:(v)=>totalQty>0?(v/totalQty*100).toFixed(1)+'%':'', textShadowBlur:4, textShadowColor:'rgba(0,0,0,0.8)' } } },
+    plugins:[ChartDataLabels]
   });
 
-  // VIP bar
+  // 2. Revenue doughnut — VSE vs VIP
+  LDM_CHARTS.revPie = new Chart(document.getElementById('ldm-c-rev-pie'), {
+    type:'doughnut',
+    data:{ labels:['VSE Revenue','VIP Revenue'], datasets:[{ data:[vseRev,vipRev],
+      backgroundColor:['#f5c84299','#9b6dff99'], borderColor:['#f5c842','#9b6dff'], borderWidth:2.5, hoverOffset:8 }] },
+    options:{ responsive:true, cutout:'58%',
+      plugins:{ legend:lo, tooltip:{ callbacks:{ label:ctx=>`${ctx.label}: ¢${Number(ctx.raw).toLocaleString()}` } },
+        datalabels:{ color:'#fff', font:{weight:'bold',size:12,family:'DM Sans'}, formatter:(v)=>totalRev>0?(v/totalRev*100).toFixed(1)+'%':'', textShadowBlur:4, textShadowColor:'rgba(0,0,0,0.8)' } } },
+    plugins:[ChartDataLabels]
+  });
+
+  // 3. VSE share pie
+  LDM_CHARTS.vsePie = new Chart(document.getElementById('ldm-c-vse-pie'), {
+    type:'doughnut',
+    data:{ labels:VSEs, datasets:[{ data:VSEs.map(v=>vseStats[v].qty),
+      backgroundColor:VSEs.map(v=>COLORS[v]+'99'), borderColor:VSEs.map(v=>COLORS[v]), borderWidth:2.5, hoverOffset:8 }] },
+    options:{ responsive:true, cutout:'55%',
+      plugins:{ legend:lo, tooltip:{ callbacks:{ label:ctx=>`${ctx.label}: ${ctx.raw.toLocaleString()} units` } },
+        datalabels:{ color:'#fff', font:{weight:'bold',size:11,family:'DM Sans'}, formatter:(v)=>vseQty>0&&v>0?(v/vseQty*100).toFixed(1)+'%':'', textShadowBlur:4, textShadowColor:'rgba(0,0,0,0.8)' } } },
+    plugins:[ChartDataLabels]
+  });
+
+  // 4. VSE bar
+  LDM_CHARTS.vseBar = new Chart(document.getElementById('ldm-c-vse-bar'), {
+    type:'bar',
+    data:{ labels:VSEs, datasets:[{ label:'Units', data:VSEs.map(v=>vseStats[v].qty),
+      backgroundColor:VSEs.map(v=>COLORS[v]+'cc'), borderColor:VSEs.map(v=>COLORS[v]), borderWidth:2, borderRadius:8 }] },
+    options:{ responsive:true, plugins:{ legend:{display:false}, tooltip:tq }, scales:darkOpts() }
+  });
+
+  // 5. VIP bar (horizontal)
   LDM_CHARTS.vipBar = new Chart(document.getElementById('ldm-c-vip-bar'), {
-    type:'bar', data:{ labels:topVips.map(([c])=>c.length>22?c.slice(0,22)+'…':c), datasets:[{ label:'Units', data:topVips.map(([,q])=>q), backgroundColor:'#9b6dff99', borderColor:'#9b6dff', borderWidth:1.5, borderRadius:4 }] },
-    options:{ indexAxis:'y', responsive:true, plugins:{ legend:{display:false}, tooltip:{ callbacks:{ label:ctx=>`${ctx.raw.toLocaleString()} units` } } }, scales:{ x:{ ticks:{color:'#6a6a8a'}, grid:{color:'rgba(255,255,255,0.05)'} }, y:{ ticks:{color:'#c0c0d0',font:{size:11}} } } }
+    type:'bar',
+    data:{ labels:topVips.map(([c])=>c.length>22?c.slice(0,22)+'…':c),
+      datasets:[{ label:'Units', data:topVips.map(([,q])=>q), backgroundColor:'#9b6dff99', borderColor:'#9b6dff', borderWidth:1.5, borderRadius:4 }] },
+    options:{ indexAxis:'y', responsive:true, plugins:{ legend:{display:false}, tooltip:{ callbacks:{ label:ctx=>`${ctx.raw.toLocaleString()} units` } } },
+      scales:{ x:{ ticks:{color:'#6a6a8a'}, grid:{color:'rgba(255,255,255,0.05)'} }, y:{ ticks:{color:'#c0c0d0',font:{size:11}} } } }
   });
 
-  // Daily stacked: VSE + VIP
+  // 6. Daily stacked — VSE + VIP
   LDM_CHARTS.daily = new Chart(document.getElementById('ldm-c-daily'), {
     type:'bar',
     data:{ labels:allDates, datasets:[
       { label:'VSE', data:allDates.map(d=>sum(vseData.filter(r=>r.dateOnly===d),'qty')), backgroundColor:'#f5c84288', borderColor:'#f5c842', borderWidth:1 },
       { label:'LDM VIPs', data:allDates.map(d=>sum(vipData.filter(r=>r.dateOnly===d),'qty')), backgroundColor:'#9b6dff88', borderColor:'#9b6dff', borderWidth:1 }
     ]},
-    options:{ responsive:true, interaction:{mode:'index',intersect:false}, plugins:{ legend:legendOpts }, scales:{ ...darkOpts(), x:{...darkOpts().x,stacked:true}, y:{...darkOpts().y,stacked:true} } }
+    options:{ responsive:true, interaction:{mode:'index',intersect:false}, plugins:{ legend:lo, tooltip:tq },
+      scales:{ ...darkOpts(), x:{...darkOpts().x,stacked:true}, y:{...darkOpts().y,stacked:true} } }
   });
 
-  // Products bar
-  LDM_CHARTS.prod = new Chart(document.getElementById('ldm-c-prod'), {
-    type:'bar', data:{ labels:topProds.map(([p])=>p.length>28?p.slice(0,28)+'…':p), datasets:[{ label:'Units', data:topProds.map(([,q])=>q), backgroundColor:topProds.map((_,i)=>['#f5c842','#4e9af1','#3ecf8e','#e84040','#9b6dff','#ff8c42'][i%6]+'99'), borderWidth:1, borderRadius:4 }] },
-    options:{ indexAxis:'y', responsive:true, plugins:{ legend:{display:false} }, scales:{ x:{ ticks:{color:'#6a6a8a'}, grid:{color:'rgba(255,255,255,0.05)'} }, y:{ ticks:{color:'#c0c0d0',font:{size:10}} } } }
-  });
-
-  // Revenue comparison bar
-  const revByDate = allDates.slice(-14); // last 14 days
-  LDM_CHARTS.rev = new Chart(document.getElementById('ldm-c-rev-bar'), {
-    type:'bar',
-    data:{ labels:revByDate, datasets:[
-      { label:'VSE Revenue', data:revByDate.map(d=>sum(vseData.filter(r=>r.dateOnly===d),'total')), backgroundColor:'#f5c84288', borderColor:'#f5c842', borderWidth:1.5, borderRadius:3 },
-      { label:'VIP Revenue', data:revByDate.map(d=>sum(vipData.filter(r=>r.dateOnly===d),'total')), backgroundColor:'#9b6dff88', borderColor:'#9b6dff', borderWidth:1.5, borderRadius:3 }
+  // 7. Weekly line — VSE + VIP
+  LDM_CHARTS.weekly = new Chart(document.getElementById('ldm-c-weekly'), {
+    type:'line',
+    data:{ labels:weeks, datasets:[
+      { label:'VSE', data:weeks.map(w=>sum(vseData.filter(r=>r.weekLabel===w),'qty')), borderColor:'#f5c842', backgroundColor:'#f5c84220', tension:0.4, fill:true, pointRadius:5, pointBackgroundColor:'#f5c842', borderWidth:2.5 },
+      { label:'LDM VIPs', data:weeks.map(w=>sum(vipData.filter(r=>r.weekLabel===w),'qty')), borderColor:'#9b6dff', backgroundColor:'#9b6dff20', tension:0.4, fill:true, pointRadius:5, pointBackgroundColor:'#9b6dff', borderWidth:2.5 }
     ]},
-    options:{ responsive:true, interaction:{mode:'index',intersect:false}, plugins:{ legend:legendOpts, tooltip:{ callbacks:{ label:ctx=>`${ctx.dataset.label}: ¢${Number(ctx.raw).toLocaleString()}` } } }, scales:darkOpts() }
+    options:{ responsive:true, interaction:{mode:'index',intersect:false}, plugins:{ legend:lo, tooltip:tq }, scales:darkOpts() }
+  });
+
+  // 8. Monthly bar — VSE + VIP
+  LDM_CHARTS.monthly = new Chart(document.getElementById('ldm-c-monthly'), {
+    type:'bar',
+    data:{ labels:months, datasets:[
+      { label:'VSE', data:months.map(m=>sum(vseData.filter(r=>r.month===m),'qty')), backgroundColor:'#f5c84288', borderColor:'#f5c842', borderWidth:1.5, borderRadius:5 },
+      { label:'LDM VIPs', data:months.map(m=>sum(vipData.filter(r=>r.month===m),'qty')), backgroundColor:'#9b6dff88', borderColor:'#9b6dff', borderWidth:1.5, borderRadius:5 }
+    ]},
+    options:{ responsive:true, interaction:{mode:'index',intersect:false}, plugins:{ legend:lo, tooltip:tq }, scales:darkOpts() }
+  });
+
+  // 9. VSE top products horizontal
+  LDM_CHARTS.vseProds = new Chart(document.getElementById('ldm-c-vse-prods'), {
+    type:'bar',
+    data:{ labels:topVseProds.map(([p])=>p.length>30?p.slice(0,30)+'…':p),
+      datasets:[{ label:'Units', data:topVseProds.map(([,q])=>q),
+        backgroundColor:SKU_COLORS.slice(0,topVseProds.length).map(c=>c+'cc'),
+        borderColor:SKU_COLORS.slice(0,topVseProds.length), borderRadius:4, borderWidth:1 }] },
+    options:{ indexAxis:'y', responsive:true, plugins:{ legend:{display:false}, tooltip:{ callbacks:{ label:ctx=>`${ctx.raw.toLocaleString()} units` } } },
+      scales:{ x:{ ticks:{color:'#6a6a8a'}, grid:{color:'rgba(255,255,255,0.05)'} }, y:{ ticks:{color:'#c0c0d0',font:{size:10}} } } }
+  });
+
+  // 10. VIP top products horizontal
+  LDM_CHARTS.vipProds = new Chart(document.getElementById('ldm-c-vip-prods'), {
+    type:'bar',
+    data:{ labels:topVipProds.map(([p])=>p.length>30?p.slice(0,30)+'…':p),
+      datasets:[{ label:'Units', data:topVipProds.map(([,q])=>q),
+        backgroundColor:topVipProds.map((_,i)=>['#9b6dff','#b08aff','#7c52d9','#c4a0ff','#6a3fc9','#8055e0'][i%6]+'cc'),
+        borderColor:'#9b6dff', borderRadius:4, borderWidth:1 }] },
+    options:{ indexAxis:'y', responsive:true, plugins:{ legend:{display:false}, tooltip:{ callbacks:{ label:ctx=>`${ctx.raw.toLocaleString()} units` } } },
+      scales:{ x:{ ticks:{color:'#6a6a8a'}, grid:{color:'rgba(255,255,255,0.05)'} }, y:{ ticks:{color:'#c0c0d0',font:{size:10}} } } }
+  });
+
+  // 11. Products compare VSE vs VIP grouped bar
+  const allProdsUnion = [...new Set([...Object.keys(vseProdQty), ...Object.keys(vipProdQty)])];
+  const topUnion = allProdsUnion.sort((a,b)=>((vseProdQty[b]||0)+(vipProdQty[b]||0))-((vseProdQty[a]||0)+(vipProdQty[a]||0))).slice(0,12);
+  LDM_CHARTS.prodCompare = new Chart(document.getElementById('ldm-c-prod-compare'), {
+    type:'bar',
+    data:{ labels:topUnion.map(p=>p.length>28?p.slice(0,28)+'…':p), datasets:[
+      { label:'VSE', data:topUnion.map(p=>vseProdQty[p]||0), backgroundColor:'#f5c84288', borderColor:'#f5c842', borderWidth:1.5, borderRadius:4 },
+      { label:'LDM VIPs', data:topUnion.map(p=>vipProdQty[p]||0), backgroundColor:'#9b6dff88', borderColor:'#9b6dff', borderWidth:1.5, borderRadius:4 }
+    ]},
+    options:{ responsive:true, interaction:{mode:'index',intersect:false}, plugins:{ legend:lo, tooltip:tq }, scales:darkOpts() }
   });
 }
 
@@ -3535,23 +3793,47 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') { collapseCh
 
 <!-- ══ LDM FULL STORY PAGE ══════════════════════════════════════════════════ -->
 <div class="ldm-page-overlay" id="ldm-story-overlay">
+
+  <!-- Sticky header -->
   <div class="ldm-page-header">
     <div>
       <div class="ldm-page-title">🏢 LDM Full Story</div>
-      <div class="ldm-page-subtitle">All channels · VSE Sales + LDM VIP Direct Customers</div>
+      <div class="ldm-page-subtitle">VSE Sales + LDM VIP Direct Customers · Full Analysis</div>
     </div>
     <div style="display:flex;gap:10px;align-items:center">
       <div style="font-size:11px;color:var(--muted)" id="ldm-story-update"></div>
-      <button class="ldm-page-close" onclick="closeLdmStory()">✕ Back to VSE Dashboard</button>
+      <button class="ldm-page-close" onclick="closeLdmStory()">✕ Back to Dashboard</button>
     </div>
   </div>
-  <div class="ldm-page-body">
-    <!-- Channel toggle -->
-    <div class="ldm-channel-toggle">
-      <button class="ch-btn active all" onclick="ldmSetChannel('all',this)">📊 All Channels</button>
-      <button class="ch-btn vse" onclick="ldmSetChannel('VSE',this)">👥 VSE Only</button>
-      <button class="ch-btn vip" onclick="ldmSetChannel('VIP',this)">⭐ LDM VIPs Only</button>
+
+  <!-- Filters bar — styled like VSE main page but teal-accented -->
+  <div class="ldm-filters-bar">
+    <div class="filter-group">
+      <label>Channel</label>
+      <select id="ldm-f-channel" onchange="ldmApplyFilters()">
+        <option value="all">All Channels</option>
+        <option value="VSE">VSE Only</option>
+        <option value="VIP">LDM VIPs Only</option>
+      </select>
     </div>
+    <div class="filter-group">
+      <label>Month</label>
+      <select id="ldm-f-month" onchange="ldmApplyFilters()"><option value="">All Months</option></select>
+    </div>
+    <div class="filter-group">
+      <label>Week</label>
+      <select id="ldm-f-week" onchange="ldmApplyFilters()"><option value="">All Weeks</option></select>
+    </div>
+    <div class="filter-group">
+      <label>Date</label>
+      <select id="ldm-f-date" onchange="ldmApplyFilters()"><option value="">All Dates</option></select>
+    </div>
+    <button class="reset-btn" onclick="ldmResetFilters()">↺ Reset</button>
+    <div class="filter-summary" id="ldm-filter-summary"></div>
+  </div>
+
+  <!-- Content -->
+  <div class="ldm-page-body" id="ldm-page-body">
     <div id="ldm-story-content">
       <div class="empty-state"><div class="empty-icon">📂</div><h3>Load your Excel file first</h3><p style="margin-top:8px;color:var(--muted)">This page auto-populates once data is loaded.</p></div>
     </div>
