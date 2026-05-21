@@ -750,6 +750,7 @@ body {
 
   /* TOV cards */
   .tov-grid { grid-template-columns: 1fr !important; }
+  #ldm-company-targets-grid { grid-template-columns: 1fr 1fr !important; }
 }
 
 /* ── VERY SMALL phones (iPhone SE, 375px) ── */
@@ -1291,9 +1292,25 @@ function isVIP(customerName) {
   return !VSE_NAMES.some(v => n.includes(v)) && n.length > 0;
 }
 
+// Month-relative week number: 4 weeks/month, 6 days/week (Mon=day1, Sat=day6)
+// Sunday is treated as part of the previous Saturday's day (clamped to Sat)
+// Week 1 = days 1-6, Week 2 = days 7-12, Week 3 = days 13-18, Week 4 = days 19-24+
 function weekNum(d) {
-  const jan1 = new Date(d.getFullYear(), 0, 1);
-  return Math.ceil((((d - jan1) / 86400000) + jan1.getDay() + 1) / 7);
+  // day-of-month (1-based)
+  const dom = d.getDate();
+  if (dom <= 6)  return 1;
+  if (dom <= 12) return 2;
+  if (dom <= 18) return 3;
+  return 4;
+}
+
+// Returns a sort key for a weekLabel like "Apr 2026 W2"
+function weekSortKey(label) {
+  // label format: "MMM YYYY W#"
+  const m = label.match(/^(\w{3}) (\d{4}) W(\d)$/);
+  if (!m) return label;
+  const monthIdx = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'].indexOf(m[1]);
+  return `${m[2]}-${String(monthIdx+1).padStart(2,'0')}-${m[3]}`;
 }
 
 function pad2(n) { return String(n).padStart(2,'0'); }
@@ -1319,11 +1336,14 @@ function parse(rows) {
 
     let dateOnly='', month='', monthKey='', week='', weekLabel='';
     if (dt && !isNaN(dt)) {
+      // Skip Sundays — treat them as non-working (clamp to previous Saturday)
+      const dayOfWeek = dt.getDay(); // 0=Sun,1=Mon...6=Sat
+      const workDt = dayOfWeek === 0 ? new Date(dt.getTime() - 86400000) : dt;
       dateOnly  = `${dt.getFullYear()}-${pad2(dt.getMonth()+1)}-${pad2(dt.getDate())}`;
-      monthKey  = `${pad2(dt.getMonth()+1)}-${dt.getFullYear()}`;
-      month     = `${MONFULL[dt.getMonth()]} ${dt.getFullYear()}`;
-      week      = weekNum(dt);
-      weekLabel = `W${week} (${pad2(dt.getDate())} ${MON[dt.getMonth()]})`;
+      monthKey  = `${pad2(workDt.getMonth()+1)}-${workDt.getFullYear()}`;
+      month     = `${MONFULL[workDt.getMonth()]} ${workDt.getFullYear()}`;
+      week      = weekNum(workDt);
+      weekLabel = `${MON[workDt.getMonth()]} ${workDt.getFullYear()} W${week}`;
     }
 
     result.push({ product, customer, vse, channel, dateOnly, month, monthKey, week:String(week), weekLabel, qty, total });
@@ -1345,11 +1365,9 @@ function buildFilterOptions() {
     return ak.localeCompare(bk);
   });
 
-  // Week - sorted by week number
+  // Week - sorted chronologically (month-relative: "Apr 2026 W1", "Apr 2026 W2", ...)
   const weeks = unique(ALL, 'weekLabel').sort((a,b) => {
-    const wa = parseInt(a.slice(1));
-    const wb = parseInt(b.slice(1));
-    return wa - wb;
+    return weekSortKey(a).localeCompare(weekSortKey(b));
   });
 
   // Dates - sorted descending
@@ -1473,7 +1491,7 @@ function render() {
   const monthDates = unique(DATA,'dateOnly').sort(); // same for now
 
   // ── Week data
-  const weekLabels = unique(DATA,'weekLabel').sort((a,b)=>parseInt(a.slice(1))-parseInt(b.slice(1)));
+  const weekLabels = unique(DATA,'weekLabel').sort((a,b)=>weekSortKey(a).localeCompare(weekSortKey(b)));
 
   // ─ Build HTML ─────────────────────────────────────────────────────────────
   document.getElementById('main').innerHTML = `
@@ -1947,7 +1965,7 @@ function render() {
     const subLabel = type==='day'
       ? `Daily target = Monthly ÷ ${WORKING_DAYS_MONTH} working days`
       : type==='week'
-      ? `Weekly target = Daily × 6 days`
+      ? `Weekly target = Daily × 6 (Mon–Sat)`
       : 'Full month target (Daily × 26)';
 
     const body = hasData ? `
@@ -2884,7 +2902,7 @@ function ldmBuildFilterOptions() {
     const bk = ALL.find(r=>r.month===b)?.monthKey||'';
     return ak.localeCompare(bk);
   });
-  const weeks = [...new Set(ALL.map(r=>r.weekLabel))].filter(Boolean).sort((a,b) => parseInt(a.slice(1)) - parseInt(b.slice(1)));
+  const weeks = [...new Set(ALL.map(r=>r.weekLabel))].filter(Boolean).sort((a,b) => weekSortKey(a).localeCompare(weekSortKey(b)));
   const dates = [...new Set(ALL.map(r=>r.dateOnly))].filter(Boolean).sort().reverse();
 
   const fill = (id, vals, ph) => {
@@ -2979,7 +2997,7 @@ function renderLdmStory() {
 
   // Dates for trend charts
   const allDates = [...new Set(base.map(r=>r.dateOnly))].filter(Boolean).sort();
-  const weeks    = [...new Set(base.map(r=>r.weekLabel))].filter(Boolean).sort((a,b)=>parseInt(a.slice(1))-parseInt(b.slice(1)));
+  const weeks    = [...new Set(base.map(r=>r.weekLabel))].filter(Boolean).sort((a,b)=>weekSortKey(a).localeCompare(weekSortKey(b)));
   const months   = [...new Set(base.map(r=>r.month))].filter(Boolean).sort((a,b)=>{
     const ak = base.find(r2=>r2.month===a)?.monthKey||''; const bk = base.find(r2=>r2.month===b)?.monthKey||'';
     return ak.localeCompare(bk);
@@ -3022,8 +3040,54 @@ function renderLdmStory() {
     </div>
   </div>
 
-  <!-- ═══ VSE MINI-CARDS (like VSE main page) ══════════════════════════════ -->
-  <div class="ldm-section-divider"><h2>👥 VSE Breakdown</h2></div>
+  <!-- ═══ SALES RANKINGS — VSEs + LDM VIPs ═══════════════════════════════════ -->
+  <div class="ldm-section-divider"><h2>🏆 Sales Rankings — VSEs vs LDM VIPs</h2></div>
+  <div style="margin-bottom:10px;font-size:12px;color:var(--muted)">LDM VIPs (direct customers) ranked alongside each individual VSE by total units sold.</div>
+  <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-bottom:22px">
+    ${(() => {
+      // Build combined ranking: 4 VSEs + LDM VIPs as one entity
+      const allEntities = [
+        ...VSEs.map(v => ({
+          id: v, label: v, color: COLORS[v], isVip: false,
+          qty: vseStats[v].qty, rev: vseStats[v].rev, txns: vseStats[v].txns,
+          pctOfTotal: totalQty>0?(vseStats[v].qty/totalQty*100).toFixed(1):0
+        })),
+        {
+          id: 'vips', label: 'LDM VIPs', color: '#9b6dff', isVip: true,
+          qty: vipQty, rev: vipRev, txns: vipData.length,
+          pctOfTotal: totalQty>0?(vipQty/totalQty*100).toFixed(1):0
+        }
+      ].sort((a,b) => b.qty - a.qty);
+
+      return allEntities.map((e, i) => {
+        const rank = i + 1;
+        const medalLabel = rank===1?'🥇':rank===2?'🥈':rank===3?'🥉':`#${rank}`;
+        const maxQtyAll = allEntities[0].qty || 1;
+        const barWidth = maxQtyAll > 0 ? (e.qty/maxQtyAll*100).toFixed(1) : 0;
+        const shareLabel = e.isVip ? 'of Total' : 'of Total';
+        const subLabel   = e.isVip
+          ? `${vipCustomers.length} VIP customers`
+          : `${e.txns} transactions`;
+        return `<div style="background:var(--card);border:1px solid ${e.isVip?'#9b6dff44':e.color+'33'};border-radius:14px;padding:18px;position:relative;overflow:hidden">
+          <div style="position:absolute;top:0;left:0;right:0;height:3px;background:${e.color}"></div>
+          <div style="position:absolute;top:14px;right:14px;font-size:18px">${medalLabel}</div>
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:${e.isVip?'18':'24'}px;letter-spacing:2px;color:${e.color};margin-bottom:10px;line-height:1.1">${e.label}</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            <div><div style="font-size:20px;font-weight:700;color:var(--gold)">${e.qty.toLocaleString()}</div><div style="font-size:10px;color:var(--muted);text-transform:uppercase">Units</div></div>
+            <div><div style="font-size:14px;font-weight:600;color:var(--text)">¢${(e.rev/1000).toFixed(1)}K</div><div style="font-size:10px;color:var(--muted);text-transform:uppercase">Revenue</div></div>
+            <div><div style="font-size:14px;font-weight:600;color:#3ecf8e">${e.pctOfTotal}%</div><div style="font-size:10px;color:var(--muted);text-transform:uppercase">${shareLabel}</div></div>
+            <div><div style="font-size:12px;font-weight:600;color:var(--muted)">${subLabel}</div><div style="font-size:10px;color:var(--muted);text-transform:uppercase">${e.isVip?'VIP count':'Txns'}</div></div>
+          </div>
+          <div style="height:4px;background:var(--border);border-radius:2px;margin-top:12px">
+            <div style="height:100%;border-radius:2px;background:${e.color};width:${barWidth}%;transition:width 0.7s ease"></div>
+          </div>
+        </div>`;
+      }).join('');
+    })()}
+  </div>
+
+  <!-- ═══ VSE BREAKDOWN (channel only) ════════════════════════════════════════ -->
+  <div class="ldm-section-divider"><h2>👥 VSE Breakdown (VSE Channel Only)</h2></div>
   <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:22px">
     ${VSEs.map((v,i) => {
       const s = vseStats[v];
@@ -3123,6 +3187,22 @@ function renderLdmStory() {
     <div class="chart-title">Product Volume — VSE vs VIP Side-by-Side</div>
     <div class="chart-sub">See which products each channel favours</div>
     <canvas id="ldm-c-prod-compare" style="max-height:320px"></canvas>
+  </div>
+
+  <!-- ═══ TARGET TRACKER — LDM FULL STORY ═══════════════════════════════════ -->
+  <div class="ldm-section-divider"><h2>🎯 Target Tracker — LDM Total Depletion</h2></div>
+  <p style="font-size:12px;color:var(--muted);margin-bottom:18px;padding:10px 14px;background:rgba(62,207,142,0.06);border-left:3px solid #3ecf8e;border-radius:0 8px 8px 0">
+    Actuals include all units depleted — VSE channel <b style="color:#f5c842">+</b> LDM VIP direct customers. Applies your active filters above. &nbsp;|&nbsp; 🟢 ≥75% &nbsp;🟡 40–74% &nbsp;🔴 &lt;40% &nbsp;⭐ Hit
+  </p>
+
+  <!-- Company overview tiles (all channels combined) -->
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:22px" id="ldm-company-targets-grid"></div>
+
+  <!-- Single combined Target vs Actual chart -->
+  <div class="chart-card" style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:20px;margin-bottom:22px">
+    <div class="chart-title" style="color:#3ecf8e">Company Target vs Total Depletion</div>
+    <div class="chart-sub">Monthly target (grey) vs all units depleted (VSE + LDM VIPs) per product</div>
+    <canvas id="ldm-c-target-overall" style="max-height:320px"></canvas>
   </div>
 
   <!-- ═══ VIP CUSTOMER DIRECTORY ═════════════════════════════════════════════ -->
@@ -3275,6 +3355,98 @@ function renderLdmStory() {
       { label:'LDM VIPs', data:topUnion.map(p=>vipProdQty[p]||0), backgroundColor:'#9b6dff88', borderColor:'#9b6dff', borderWidth:1.5, borderRadius:4 }
     ]},
     options:{ responsive:true, interaction:{mode:'index',intersect:false}, plugins:{ legend:lo, tooltip:tq }, scales:darkOpts() }
+  });
+
+  // ── LDM TARGETS SECTION ───────────────────────────────────────────────────
+  // Actuals = ALL units from LDM Full Story (VSE + VIP), matching active filters
+  const ldmCompanyActuals = {};
+  COMPANY_TARGETS.forEach(t => { ldmCompanyActuals[t.key] = 0; });
+  base.forEach(r => {  // 'base' already = filtered LDM_DATA (VSE + VIP)
+    const key = matchTarget(r.product);
+    if (key) ldmCompanyActuals[key] += r.qty;
+  });
+
+  function ldmPctColor(pct) {
+    if (pct >= 100) return '#3ecf8e'; if (pct >= 75) return '#3ecf8e'; if (pct >= 40) return '#f5c842'; return '#e84040';
+  }
+  function ldmBarBg(pct) {
+    if (pct >= 100) return '#3ecf8ecc'; if (pct >= 75) return '#3ecf8e88'; if (pct >= 40) return '#f5c84288'; return '#e8404088';
+  }
+
+  // Company target tiles
+  document.getElementById('ldm-company-targets-grid').innerHTML = COMPANY_TARGETS.map(t => {
+    const act = ldmCompanyActuals[t.key];
+    const raw = t.total > 0 ? (act / t.total) * 100 : 0;
+    const clr = ldmPctColor(raw);
+    const icon = raw >= 100 ? '⭐' : raw >= 75 ? '🟢' : raw >= 40 ? '🟡' : '🔴';
+    return `<div style="background:var(--card);border:1px solid rgba(62,207,142,0.2);border-top:3px solid #3ecf8e;border-radius:12px;padding:14px 16px">
+      <div style="font-size:10px;color:#3ecf8e;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;font-weight:600">${t.label}</div>
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px">
+        <span style="font-family:'Bebas Neue',sans-serif;font-size:32px;line-height:1;color:${clr}">${raw.toFixed(0)}%</span>
+        <span style="font-size:10px;color:var(--muted);text-align:right;line-height:1.5">${act.toLocaleString()}<br>of ${t.total.toLocaleString()}</span>
+      </div>
+      <div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden;margin-bottom:6px">
+        <div style="height:100%;width:${Math.min(raw,100)}%;background:${clr};border-radius:3px;transition:width 0.8s ease${raw>=100?';box-shadow:0 0 8px '+clr+'80':''}"></div>
+      </div>
+      <div style="font-size:11px;color:var(--muted)">${icon} ${raw>=100?'Target hit':'Gap: '+(t.total-act).toLocaleString()+' units'}</div>
+    </div>`;
+  }).join('');
+
+  // Single combined chart — teal accent to match page
+  const ldmTgtLabels = COMPANY_TARGETS.map(t => t.label);
+  LDM_CHARTS.tgtOverall = new Chart(document.getElementById('ldm-c-target-overall'), {
+    type: 'bar',
+    data: {
+      labels: ldmTgtLabels,
+      datasets: [
+        {
+          label: 'Monthly Target',
+          data: COMPANY_TARGETS.map(t => t.total),
+          backgroundColor: 'rgba(255,255,255,0.06)',
+          borderColor: 'rgba(255,255,255,0.25)',
+          borderWidth: 1.5,
+          borderRadius: 6
+        },
+        {
+          label: 'Total Depleted (VSE + VIPs)',
+          data: COMPANY_TARGETS.map(t => ldmCompanyActuals[t.key]),
+          backgroundColor: COMPANY_TARGETS.map(t => ldmBarBg((ldmCompanyActuals[t.key]/t.total)*100)),
+          borderColor: COMPANY_TARGETS.map(t => ldmPctColor((ldmCompanyActuals[t.key]/t.total)*100)),
+          borderWidth: 1.5,
+          borderRadius: 6
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: legendOpts,
+        tooltip: {
+          callbacks: {
+            label: ctx => {
+              if (ctx.datasetIndex === 0) return ` Target: ${ctx.raw.toLocaleString()} units`;
+              const tgt = COMPANY_TARGETS[ctx.dataIndex]?.total || 1;
+              const pct = (ctx.raw / tgt * 100).toFixed(1);
+              return ` Depleted: ${ctx.raw.toLocaleString()} units (${pct}%)`;
+            }
+          }
+        },
+        datalabels: {
+          display: ctx => ctx.datasetIndex === 1,
+          anchor: 'end', align: 'top',
+          color: '#c0d0c8',
+          font: { size: 11, weight: '700', family: 'DM Sans' },
+          formatter: (val, ctx) => {
+            const tgt = COMPANY_TARGETS[ctx.dataIndex]?.total || 1;
+            const pct = (val / tgt * 100).toFixed(0);
+            return `${val.toLocaleString()}\n${pct}%`;
+          }
+        }
+      },
+      scales: { ...darkOpts(), y: { ...darkOpts().y, grace: '15%' } }
+    },
+    plugins: [ChartDataLabels]
   });
 }
 
