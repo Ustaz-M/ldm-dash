@@ -1146,27 +1146,27 @@ const WORKING_DAYS_MONTH = 26;
 const WORKING_WEEKS_MONTH = 4.33;
 
 const COMPANY_TARGETS = [
-  { key:'guinness',   label:'Guinness FES',      total:2468, daily:95,  keywords:['guinness fes','fes 330'] },
-  { key:'star',       label:'Star Lager',         total:781,  daily:30,  keywords:['star lager'] },
-  { key:'gulder',     label:'Gulder Lager',       total:1274, daily:49,  keywords:['gulder'] },
-  { key:'abc',        label:'ABC Golden Lager',   total:1632, daily:63,  keywords:['abc golden'] },
-  { key:'smirnoff',   label:'Smirnoff RTD',       total:829,  daily:32,  keywords:['smir ice','smirnoff rtd','smirnoff'] },
-  { key:'orijin',     label:'Orijin 625ml',       total:1759, daily:68,  keywords:['orijin 625'] },
+  { key:'guinness',   label:'Guinness FES',      total:4680, daily:180, keywords:['guinness fes','fes 330'] },
+  { key:'star',       label:'Star Lager',         total:1560, daily:60,  keywords:['star lager'] },
+  { key:'gulder',     label:'Gulder Lager',       total:3120, daily:120, keywords:['gulder'] },
+  { key:'abc',        label:'ABC Golden Lager',   total:3120, daily:120, keywords:['abc golden'] },
+  { key:'smirnoff',   label:'Smirnoff RTD',       total:2080, daily:80,  keywords:['smir ice','smirnoff rtd','smirnoff'] },
+  { key:'orijin',     label:'Orijin 625ml',       total:3640, daily:140, keywords:['orijin 625'] },
   { key:'orijin300',  label:'Orijin 300ml',       total:72,   daily:3,   keywords:['orijin 300','orijin300'] },
-  { key:'mg',         label:'MG CANS',            total:2280, daily:88,  keywords:['malta guinness 330ml 24x01 can','malta guinness can 24','mg can','mg cans'] },
+  { key:'mg',         label:'MG CANS',            total:5200, daily:200, keywords:['malta guinness 330ml 24x01 can','malta guinness can 24','mg can','mg cans'] },
   // MG RET = Guinness Malta RET 24 x 01
-  { key:'mgret',      label:'MG RET',             total:2464, daily:95,  keywords:['guinness malta 330ml ret 24','guinness malta ret 24','malta guinness ret 24','mg ret','mgret'] },
+  { key:'mgret',      label:'MG RET',             total:4680, daily:180, keywords:['guinness malta 330ml ret 24','guinness malta ret 24','malta guinness ret 24','mg ret','mgret'] },
   // MG PET = Guinness Malta 330ml PET 12X01
-  { key:'mgpet',      label:'MG PET',             total:2441, daily:94,  keywords:['guinness malta 330ml pet','malta guinness pet','mgpet'] },
+  { key:'mgpet',      label:'MG PET',             total:5200, daily:200, keywords:['guinness malta 330ml pet','malta guinness pet','mgpet'] },
   { key:'alvaro',     label:'Alvaro PET',         total:101,  daily:4,   keywords:['alvaro pet','alvaro'] },
 ];
 
 // Per-VSE FIXED daily targets (rounded to nearest 10)
 const VSE_DAILY = {
-  Francis:            { guinness:24, star:8,  gulder:12, abc:16, smirnoff:8,  orijin:17, orijin300:1, mg:22, mgpet:24, mgret:24, alvaro:1 },
-  Stephen:            { guinness:24, star:8,  gulder:12, abc:16, smirnoff:8,  orijin:17, orijin300:1, mg:22, mgpet:24, mgret:24, alvaro:1 },
-  Elisha:             { guinness:24, star:7,  gulder:13, abc:16, smirnoff:8,  orijin:17, orijin300:1, mg:22, mgpet:23, mgret:24, alvaro:1 },
-  'Josephine/Kotey':  { guinness:23, star:7,  gulder:12, abc:15, smirnoff:8,  orijin:17, orijin300:0, mg:22, mgpet:23, mgret:23, alvaro:1 },
+  Francis:            { guinness:60, star:20, gulder:40, abc:40, smirnoff:30, orijin:50, orijin300:1, mg:70, mgpet:70, mgret:60, alvaro:1 },
+  Stephen:            { guinness:60, star:20, gulder:40, abc:40, smirnoff:30, orijin:50, orijin300:1, mg:70, mgpet:70, mgret:60, alvaro:1 },
+  Elisha:             { guinness:30, star:10, gulder:20, abc:20, smirnoff:10, orijin:20, orijin300:1, mg:30, mgpet:30, mgret:30, alvaro:1 },
+  'Josephine/Kotey':  { guinness:30, star:10, gulder:20, abc:20, smirnoff:10, orijin:20, orijin300:0, mg:30, mgpet:30, mgret:30, alvaro:1 },
 };
 
 // Keep split ratios for backward compat but targets now come from VSE_DAILY
